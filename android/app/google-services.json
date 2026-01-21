@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "270143030213",
+    "project_id": "cancer-cell-analysis",
+    "storage_bucket": "cancer-cell-analysis.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:270143030213:android:57c5be9c451ef595efc1ac",
+        "android_client_info": {
+          "package_name": "com.example.cancer_cell_analysis"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "270143030213-s3396b2tq8tvs5495i8eg5aiet7vshf9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCYznu9z1a-mggX9yoUvG5PXn6EWttPcDI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "270143030213-s3396b2tq8tvs5495i8eg5aiet7vshf9.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

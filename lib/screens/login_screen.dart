@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'dart:ui';
+import '../services/auth_service.dart'; // import service
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -8,57 +10,114 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _formKey = GlobalKey<FormState>(); // สำหรับ Validation
-  final _userController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  final _emailController = TextEditingController(); // เปลี่ยนชื่อจาก user เป็น email ให้สื่อความหมาย
   final _passController = TextEditingController();
+  final AuthService _authService = AuthService(); // เรียกใช้ Service
+  bool _isLoading = false;
 
-  void _login() {
-    // จุดตรวจสอบข้อมูล (Validation) จุดที่ 1
+  void _login() async {
     if (_formKey.currentState!.validate()) {
-      // จำลองการตรวจสอบกับฐานข้อมูล Users
-      Navigator.pushReplacementNamed(context, '/dashboard');
+      setState(() => _isLoading = true);
+      try {
+        await _authService.login(
+          _emailController.text.trim(),
+          _passController.text.trim(),
+        );
+        // Login ผ่าน -> ไป Dashboard
+        if (mounted) Navigator.pushReplacementNamed(context, '/dashboard');
+      } catch (e) {
+        if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Login Failed: $e"), backgroundColor: Colors.red));
+        }
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(30.0),
-          child: Form(
-            key: _formKey,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft, end: Alignment.bottomRight,
+            colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
+          ),
+        ),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(30.0),
             child: Column(
               children: [
-                const Icon(Icons.biotech, size: 100, color: Colors.indigo),
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Icon(Icons.bubble_chart, size: 100, color: Colors.cyanAccent.withOpacity(0.5)),
+                    const Icon(Icons.auto_awesome, size: 60, color: Colors.white),
+                  ],
+                ),
                 const SizedBox(height: 20),
-                const Text("ระบบ AI วิเคราะห์เซลล์มะเร็ง", 
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                const Text("BioAI Analytics", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 1.5)),
+                const Text("Automated Cell Colony Counting", style: TextStyle(fontSize: 14, color: Colors.white70)),
                 const SizedBox(height: 40),
-                TextFormField(
-                  controller: _userController,
-                  decoration: const InputDecoration(labelText: 'ชื่อผู้ใช้งาน', border: OutlineInputBorder()),
-                  validator: (value) => (value == null || value.isEmpty) ? 'กรุณากรอกชื่อผู้ใช้' : null,
+
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    child: Container(
+                      padding: const EdgeInsets.all(25),
+                      decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withOpacity(0.2))),
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          children: [
+                            _buildTextField(_emailController, 'Email', Icons.email), // ใช้ Email แทน Username
+                            const SizedBox(height: 20),
+                            _buildTextField(_passController, 'Password', Icons.lock, isObscure: true),
+                            const SizedBox(height: 30),
+                            _isLoading
+                                ? const CircularProgressIndicator(color: Colors.cyanAccent)
+                                : ElevatedButton(
+                                    onPressed: _login,
+                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.cyanAccent, foregroundColor: Colors.black87, minimumSize: const Size(double.infinity, 50), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                                    child: const Text("LOGIN", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                  ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 20),
-                TextFormField(
-                  controller: _passController,
-                  obscureText: true,
-                  decoration: const InputDecoration(labelText: 'รหัสผ่าน', border: OutlineInputBorder()),
-                  validator: (value) => (value == null || value.length < 6) ? 'รหัสผ่านต้องมี 6 ตัวขึ้นไป' : null,
-                ),
-                const SizedBox(height: 30),
-                ElevatedButton(
-                  onPressed: _login,
-                  style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 50)),
-                  child: const Text("เข้าสู่ระบบ"),
+                // ปุ่มไปหน้าสมัครสมาชิก
+                TextButton(
+                  onPressed: () => Navigator.pushNamed(context, '/register'),
+                  child: const Text("Don't have an account? Register", style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildTextField(TextEditingController controller, String label, IconData icon, {bool isObscure = false}) {
+    return TextFormField(
+      controller: controller,
+      obscureText: isObscure,
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
+        prefixIcon: Icon(icon, color: Colors.cyanAccent),
+        filled: true, fillColor: Colors.white.withOpacity(0.05),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      ),
+      validator: (value) => (value == null || value.length < 6) ? 'Invalid $label' : null,
     );
   }
 }
