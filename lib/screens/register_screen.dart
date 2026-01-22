@@ -11,10 +11,15 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _studentIdController = TextEditingController();
+  
+  // เปลี่ยนตัวแปรให้ตรงกับโจทย์ใหม่
+  final _usernameController = TextEditingController(); // ใช้ Username แทน StudentID
   final _emailController = TextEditingController();
   final _passController = TextEditingController();
+  
+  // Name อาจจะไม่จำเป็นถ้าใช้ Username แต่ถ้าอยากเก็บไว้ก็ได้ (ผมตัดออกเพื่อให้กระชับตามที่ขอ)
+  // final _nameController = TextEditingController(); 
+
   final AuthService _authService = AuthService();
   bool _isLoading = false;
 
@@ -25,9 +30,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
         await _authService.register(
           email: _emailController.text.trim(),
           password: _passController.text.trim(),
-          name: _nameController.text.trim(),
-          studentId: _studentIdController.text.trim(),
+          username: _usernameController.text.trim(), // ส่ง Username ไปแทน
         );
+        
         // สมัครเสร็จ ไปหน้า Dashboard ทันที
         if (mounted) Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
       } catch (e) {
@@ -71,14 +76,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         key: _formKey,
                         child: Column(
                           children: [
-                            _buildTextField(_nameController, 'Full Name', Icons.badge),
+                            // 1. ช่อง Username
+                            _buildTextField(_usernameController, 'Username', Icons.account_circle),
                             const SizedBox(height: 15),
-                            _buildTextField(_studentIdController, 'Student ID', Icons.school),
-                            const SizedBox(height: 15),
+                            
+                            // 2. ช่อง Email
                             _buildTextField(_emailController, 'Email', Icons.email),
                             const SizedBox(height: 15),
+                            
+                            // 3. ช่อง Password
                             _buildTextField(_passController, 'Password', Icons.lock, isObscure: true),
                             const SizedBox(height: 30),
+                            
                             _isLoading 
                               ? const CircularProgressIndicator(color: Colors.cyanAccent)
                               : ElevatedButton(

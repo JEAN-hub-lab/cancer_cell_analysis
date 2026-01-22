@@ -5,49 +5,62 @@ class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // ฟังก์ชันสมัครสมาชิก (Register)
+  // 1. สมัครสมาชิก (แบบเดิม: พิมพ์ยังไงเก็บอย่างนั้น)
   Future<User?> register({
     required String email,
     required String password,
-    required String name,
-    required String studentId,
+    required String username,
   }) async {
     try {
-      // 1. สร้าง User ในระบบ Authentication
+      // แค่ตัดช่องว่างพอ ไม่ต้องแปลงตัวเล็ก/ใหญ่
+      String cleanUsername = username.trim();
+      String cleanEmail = email.trim();
+
+      // เช็ก Username ซ้ำ
+      final checkUser = await _firestore.collection('users')
+          .where('username', isEqualTo: cleanUsername).get();
+          
+      if (checkUser.docs.isNotEmpty) throw "Username '$username' is already taken.";
+
       UserCredential result = await _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
+        email: cleanEmail, password: password,
       );
       
       User? user = result.user;
-
-      // 2. เก็บข้อมูลเพิ่ม (ชื่อ, รหัสนศ.) ลงใน Firestore Database
       if (user != null) {
         await _firestore.collection('users').doc(user.uid).set({
           'uid': user.uid,
-          'email': email,
-          'name': name,
-          'studentId': studentId,
+          'email': cleanEmail,
+          'username': cleanUsername, // เก็บค่าเดิมเป๊ะๆ
           'createdAt': FieldValue.serverTimestamp(),
         });
       }
       return user;
-    } on FirebaseAuthException catch (e) {
-      // จับ Error ของ Firebase โดยเฉพาะ (เช่น รหัสผ่านสั้น, อีเมลซ้ำ)
-      throw e.message ?? "Registration failed";
     } catch (e) {
-      // จับ Error อื่นๆ ทั้งหมด (เช่น เรื่อง Permission Database)
-      // สำคัญ: ส่ง e.toString() ออกไป เพื่อให้เรารู้ว่ามันพังเพราะอะไร
       throw e.toString();
     }
   }
 
-  // ฟังก์ชันเข้าสู่ระบบ (Login)
-  Future<User?> login(String email, String password) async {
+  // 2. ล็อกอิน (แบบเดิม: ค้นหาตามที่พิมพ์เป๊ะๆ)
+  Future<User?> login(String input, String password) async {
     try {
+      String cleanInput = input.trim();
+      String email = cleanInput;
+      
+      // ถ้าไม่มี @ แสดงว่าเป็น Username
+      if (!cleanInput.contains('@')) {
+        // ค้นหาเลย ไม่ต้องแปลงเป็นตัวเล็ก
+        final query = await _firestore.collection('users')
+            .where('username', isEqualTo: cleanInput).limit(1).get();
+        
+        if (query.docs.isEmpty) throw "Username not found";
+        
+        // ถ้าเจอ ให้เอาอีเมลออกมา
+        email = query.docs.first.data()['email'];
+      }
+
       UserCredential result = await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
+        email: email, password: password,
       );
       return result.user;
     } on FirebaseAuthException catch (e) {
@@ -57,8 +70,7 @@ class AuthService {
     }
   }
 
-  // ฟังก์ชันออกจากระบบ
-  Future<void> logout() async {
-    await _auth.signOut();
-  }
+  Future<void> logout() async => await _auth.signOut();
+  
+  User? get currentUser => _auth.currentUser;
 }

@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // เพิ่มตัวนี้
 import 'firebase_options.dart';
 
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/dashboard_screen.dart';
-import 'screens/upload_screen.dart';
 import 'screens/profile_screen.dart';
-// import 'screens/processing_screen.dart'; // ไม่ต้อง import ก็ได้ถ้าไม่ได้ใช้ใน routes (แต่ทิ้งไว้ก็ไม่เป็นไร)
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,13 +31,24 @@ class CancerCellApp extends StatelessWidget {
         useMaterial3: true,
         scaffoldBackgroundColor: const Color(0xFFF5F7FA),
       ),
-      home: const LoginScreen(),
+      // แก้ตรงนี้: เช็กสถานะล็อกอินก่อนเลือกหน้าแรก
+      home: StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator()); // รอโหลด
+          }
+          if (snapshot.hasData) {
+            return const DashboardScreen(); // ถ้ามี User ค้างอยู่ ไป Dashboard เลย
+          }
+          return const LoginScreen(); // ถ้าไม่มี ให้ไปหน้า Login
+        },
+      ),
       routes: {
+        '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
         '/dashboard': (context) => const DashboardScreen(),
-        '/upload': (context) => const UploadScreen(),
         '/profile': (context) => const ProfileScreen(),
-        // ลบ '/processing' ออกแล้ว เพราะเราเรียกใช้แบบส่งค่า (Parameter) ใน UploadScreen แทน
       },
     );
   }

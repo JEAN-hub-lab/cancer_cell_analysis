@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
-import '../services/auth_service.dart'; // import service
+import '../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -11,21 +11,22 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController(); // เปลี่ยนชื่อจาก user เป็น email ให้สื่อความหมาย
+  // เปลี่ยนชื่อตัวแปรให้สื่อความหมาย (รับได้ทั้ง Username และ Email)
+  final _usernameController = TextEditingController(); 
   final _passController = TextEditingController();
-  final AuthService _authService = AuthService(); // เรียกใช้ Service
+  final AuthService _authService = AuthService();
   bool _isLoading = false;
 
   void _login() async {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
       try {
+        // เรียกใช้ฟังก์ชัน login ตัวใหม่ที่รองรับ Username
         await _authService.login(
-          _emailController.text.trim(),
+          _usernameController.text.trim(),
           _passController.text.trim(),
         );
-        // Login ผ่าน -> ไป Dashboard
-        if (mounted) Navigator.pushReplacementNamed(context, '/dashboard');
+        // ไม่ต้องสั่ง Navigator แล้ว เพราะ StreamBuilder ใน main.dart จะจัดการพาไป Dashboard เอง
       } catch (e) {
         if (mounted) {
            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Login Failed: $e"), backgroundColor: Colors.red));
@@ -74,7 +75,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         key: _formKey,
                         child: Column(
                           children: [
-                            _buildTextField(_emailController, 'Email', Icons.email), // ใช้ Email แทน Username
+                            // แก้ Label ตรงนี้
+                            _buildTextField(_usernameController, 'Username or Email', Icons.person), 
                             const SizedBox(height: 20),
                             _buildTextField(_passController, 'Password', Icons.lock, isObscure: true),
                             const SizedBox(height: 30),
@@ -92,7 +94,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                // ปุ่มไปหน้าสมัครสมาชิก
                 TextButton(
                   onPressed: () => Navigator.pushNamed(context, '/register'),
                   child: const Text("Don't have an account? Register", style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold)),
@@ -117,7 +118,7 @@ class _LoginScreenState extends State<LoginScreen> {
         filled: true, fillColor: Colors.white.withOpacity(0.05),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
       ),
-      validator: (value) => (value == null || value.length < 6) ? 'Invalid $label' : null,
+      validator: (value) => (value == null || value.length < 3) ? 'Invalid input' : null,
     );
   }
 }

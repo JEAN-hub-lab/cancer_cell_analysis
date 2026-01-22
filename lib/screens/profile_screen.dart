@@ -1,67 +1,109 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/auth_service.dart';
+import 'dart:ui'; // สำหรับ Glassmorphism
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final user = AuthService().currentUser;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0F2027), // Dark Theme
-      appBar: AppBar(
-        title: const Text("Researcher Profile"),
-        backgroundColor: Colors.transparent,
-        foregroundColor: Colors.white,
-      ),
-      body: Center(
-        child: Column(
-          children: [
-            const SizedBox(height: 40),
-            // รูปโปรไฟล์แบบเรืองแสง
-            Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.cyanAccent, width: 2),
-                boxShadow: [BoxShadow(color: Colors.cyanAccent.withOpacity(0.3), blurRadius: 20)],
+      // พื้นหลัง Gradient แบบ Premium
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft, end: Alignment.bottomRight,
+            colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
+          ),
+        ),
+        child: Center(
+          child: user == null 
+            ? const Text("No User Logged In", style: TextStyle(color: Colors.white))
+            : FutureBuilder<DocumentSnapshot>(
+                future: FirebaseFirestore.instance.collection('users').doc(user.uid).get(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) return const CircularProgressIndicator(color: Colors.cyanAccent);
+                  
+                  var userData = snapshot.data!.data() as Map<String, dynamic>;
+
+                  return Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const CircleAvatar(
+                        radius: 50,
+                        backgroundColor: Colors.cyanAccent,
+                        child: Icon(Icons.person, size: 60, color: Colors.black54),
+                      ),
+                      const SizedBox(height: 30),
+                      
+                      // การ์ดข้อมูลผู้ใช้แบบกระจก
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                          child: Container(
+                            width: 320,
+                            padding: const EdgeInsets.all(25),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: Colors.white.withOpacity(0.2)),
+                            ),
+                            child: Column(
+                              children: [
+                                _infoRow(Icons.badge, "Username", userData['username'] ?? '-'),
+                                const Divider(color: Colors.white24),
+                                _infoRow(Icons.email, "Email", userData['email'] ?? '-'),
+                                const Divider(color: Colors.white24),
+                                _infoRow(Icons.verified_user, "UID", user.uid.substring(0, 5) + "..."),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 40),
+                      
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          AuthService().logout();
+                          Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+                        },
+                        icon: const Icon(Icons.logout),
+                        label: const Text("LOGOUT"),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.redAccent.withOpacity(0.8),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                        ),
+                      )
+                    ],
+                  );
+                },
               ),
-              child: const CircleAvatar(
-                radius: 60,
-                backgroundColor: Colors.white10,
-                child: Icon(Icons.person, size: 60, color: Colors.white),
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text("Printhorn K.", style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-            const Text("ID: 66133950", style: TextStyle(color: Colors.cyanAccent, fontSize: 16)),
-            const SizedBox(height: 40),
-            
-            // เมนูตั้งค่า
-            _buildProfileItem(Icons.settings, "Application Settings"),
-            _buildProfileItem(Icons.history, "Export History (CSV)"),
-            _buildProfileItem(Icons.help_outline, "Help & Support"),
-            
-            const Spacer(),
-            TextButton.icon(
-              onPressed: () {
-                 // กลับไปหน้า Login และล้าง Stack ทั้งหมด
-                 Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
-              },
-              icon: const Icon(Icons.logout, color: Colors.redAccent),
-              label: const Text("LOGOUT", style: TextStyle(color: Colors.redAccent)),
-            ),
-            const SizedBox(height: 40),
-          ],
         ),
       ),
     );
   }
 
-  Widget _buildProfileItem(IconData icon, String title) {
-    return ListTile(
-      leading: Icon(icon, color: Colors.white70),
-      title: Text(title, style: const TextStyle(color: Colors.white)),
-      trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.white24),
-      onTap: () {},
+  Widget _infoRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.cyanAccent),
+          const SizedBox(width: 15),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+              Text(value, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            ],
+          )
+        ],
+      ),
     );
   }
 }

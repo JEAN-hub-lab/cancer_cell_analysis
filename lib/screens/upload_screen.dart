@@ -1,10 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import 'processing_screen.dart'; // import เพื่อส่งค่า
+import 'processing_screen.dart';
 
 class UploadScreen extends StatefulWidget {
-  const UploadScreen({super.key});
+  final String projectId;
+  final String cellLine;
+  final String drugName;
+
+  const UploadScreen({
+    super.key, 
+    required this.projectId,
+    required this.cellLine,
+    required this.drugName,
+  });
 
   @override
   State<UploadScreen> createState() => _UploadScreenState();
@@ -13,121 +22,154 @@ class UploadScreen extends StatefulWidget {
 class _UploadScreenState extends State<UploadScreen> {
   File? _image;
   final _picker = ImagePicker();
-  
-  // ตัวแปรสำหรับเก็บค่า Input
-  final _cellLineController = TextEditingController();
-  final _drugNameController = TextEditingController();
   final _concentrationController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
   Future<void> _pickImage(ImageSource source) async {
     final pickedFile = await _picker.pickImage(source: source);
-    if (pickedFile != null) {
-      setState(() {
-        _image = File(pickedFile.path);
-      });
-    }
+    if (pickedFile != null) setState(() => _image = File(pickedFile.path));
   }
 
   void _submit() {
     if (_formKey.currentState!.validate() && _image != null) {
-      // ส่งข้อมูลทั้งหมดไปหน้า Processing
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (context) => ProcessingScreen(
+            projectId: widget.projectId,
             imageFile: _image!,
-            cellLine: _cellLineController.text,
-            drugName: _drugNameController.text,
+            cellLine: widget.cellLine,
+            drugName: widget.drugName,
             concentration: _concentrationController.text,
           ),
         ),
       );
     } else if (_image == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please upload an image first")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please upload an image first"))
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Setup Experiment")),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text("Experimental Parameters", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1A237E))),
-              const SizedBox(height: 15),
-              
-              // Input 1: Cell Line
-              _buildInput("Cell Line (e.g., A549, H23)", _cellLineController, Icons.biotech),
-              const SizedBox(height: 15),
-              // Input 2: Drug Name
-              _buildInput("Drug Name (e.g., Isalpinin)", _drugNameController, Icons.medication_liquid),
-              const SizedBox(height: 15),
-              // Input 3: Concentration
-              _buildInput("Concentration (µM)", _concentrationController, Icons.science, isNumber: true),
-
-              const SizedBox(height: 30),
-              const Text("Image Sample", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 10),
-              
-              // Image Preview Area
-              GestureDetector(
-                onTap: () => _pickImage(ImageSource.gallery),
-                child: Container(
-                  height: 200,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(15),
-                    border: Border.all(color: Colors.indigo.withOpacity(0.2)),
-                    image: _image != null ? DecorationImage(image: FileImage(_image!), fit: BoxFit.cover) : null,
-                  ),
-                  child: _image == null
-                      ? Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.add_a_photo, size: 50, color: Colors.indigo.withOpacity(0.3)),
-                            const Text("Tap to upload image", style: TextStyle(color: Colors.grey)),
-                          ],
-                        )
-                      : null,
-                ),
+      extendBodyBehindAppBar: true,
+      // 🟢 1. กันเหนียว: ตั้งสีพื้นหลัง Scaffold เป็นสีเข้มด้วย (เผื่อมีช่องว่างโผล่)
+      backgroundColor: const Color(0xFF0F2027),
+      
+      appBar: AppBar(
+        title: const Text("Add Data Point", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.cyanAccent),
+      ),
+      
+      // 🟢 2. ใช้ Stack เพื่อแยกพื้นหลังออกจากเนื้อหา
+      body: Stack(
+        children: [
+          // Layer 1: พื้นหลัง (บังคับให้เต็มจอเสมอ ไม่ว่าจะเนื้อหาสั้นหรือยาว)
+          Container(
+            height: double.infinity, // เต็มความสูงจอ
+            width: double.infinity,  // เต็มความกว้างจอ
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft, end: Alignment.bottomRight,
+                colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
               ),
-              const SizedBox(height: 30),
-              
-              ElevatedButton(
-                onPressed: _submit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1A237E),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 18),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                ),
-                child: const Text("ANALYZE DATA", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              ),
-            ],
+            ),
           ),
-        ),
+          
+          // Layer 2: เนื้อหา (เลื่อนขึ้นลงได้)
+          SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 100, 24, 40), // เพิ่ม Padding ล่างเผื่อจอยาว
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(15),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.08), 
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(color: Colors.white.withOpacity(0.1)),
+                    ),
+                    child: Column(
+                      children: [
+                        _infoRow(Icons.biotech, "Cell Line", widget.cellLine),
+                        const Divider(color: Colors.white24),
+                        _infoRow(Icons.medication, "Drug Name", widget.drugName),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 25),
+                  
+                  TextFormField(
+                    controller: _concentrationController,
+                    keyboardType: TextInputType.number,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: "Concentration (µM)",
+                      labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
+                      prefixIcon: const Icon(Icons.science, color: Colors.cyanAccent),
+                      filled: true, 
+                      fillColor: Colors.white.withOpacity(0.05),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    ),
+                    validator: (value) => value!.isEmpty ? 'Required field' : null,
+                  ),
+                  const SizedBox(height: 30),
+
+                  GestureDetector(
+                    onTap: () => _pickImage(ImageSource.gallery),
+                    child: Container(
+                      height: 200,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(color: Colors.cyanAccent.withOpacity(0.3), style: BorderStyle.solid),
+                        image: _image != null ? DecorationImage(image: FileImage(_image!), fit: BoxFit.cover) : null,
+                      ),
+                      child: _image == null
+                          ? const Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.add_a_photo, size: 50, color: Colors.white30),
+                                SizedBox(height: 10),
+                                Text("Tap to upload image", style: TextStyle(color: Colors.white30)),
+                              ],
+                            )
+                          : null,
+                    ),
+                  ),
+                  const SizedBox(height: 30),
+                  
+                  ElevatedButton(
+                    onPressed: _submit,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.cyanAccent,
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text("ANALYZE", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildInput(String label, TextEditingController controller, IconData icon, {bool isNumber = false}) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: isNumber ? TextInputType.number : TextInputType.text,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon, color: Colors.indigo),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        filled: true,
-        fillColor: Colors.white,
-      ),
-      validator: (value) => value!.isEmpty ? 'Required field' : null,
-    );
-  }
+  Widget _infoRow(IconData icon, String l, String v) => Row(
+    children: [
+      Icon(icon, color: Colors.cyanAccent, size: 20),
+      const SizedBox(width: 10),
+      Text("$l: ", style: const TextStyle(color: Colors.white70)),
+      Text(v, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
+    ]
+  );
 }
