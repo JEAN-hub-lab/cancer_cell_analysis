@@ -7,17 +7,88 @@ import 'upload_screen.dart';
 
 class ProjectDetailScreen extends StatelessWidget {
   final String projectId;
+  // ค่าพวกนี้รับมาเพื่อใช้เป็นค่าเริ่มต้นเฉยๆ แต่เราจะดึงใหม่จาก Stream เพื่อให้มันอัปเดตได้
   final String projectName;
-  final String cellLine; // รับค่า
-  final String drugName; // รับค่า
+  final String cellLine;
+  final String drugName;
 
   const ProjectDetailScreen({
-    super.key, 
-    required this.projectId, 
+    super.key,
+    required this.projectId,
     required this.projectName,
     required this.cellLine,
     required this.drugName,
   });
+
+  // ---------------------------------------------------------------------------
+  // ส่วนฟังก์ชันแก้ไขข้อมูล (Edit Dialog) - แก้ไขให้ครบเครื่อง
+  // ---------------------------------------------------------------------------
+  void _showEditProjectDialog(BuildContext context, String currentName, String currentDesc, String currentCell, String currentDrug) {
+    final nameCtrl = TextEditingController(text: currentName);
+    final descCtrl = TextEditingController(text: currentDesc); // ✅ เพิ่ม Controller Description
+    final cellCtrl = TextEditingController(text: currentCell);
+    final drugCtrl = TextEditingController(text: currentDrug);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF203A43),
+        title: const Text("Edit Project Details", style: TextStyle(color: Colors.white)),
+        content: SingleChildScrollView( // ใช้ ScrollView กันคีย์บอร์ดบัง
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildTextField(nameCtrl, "Project Name"),
+              const SizedBox(height: 10),
+              _buildTextField(descCtrl, "Description"), // ✅ เพิ่มช่องกรอก Description
+              const SizedBox(height: 10),
+              _buildTextField(cellCtrl, "Cell Line"),
+              const SizedBox(height: 10),
+              _buildTextField(drugCtrl, "Drug Name"),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel", style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.cyanAccent, foregroundColor: Colors.black),
+            onPressed: () async {
+              if (nameCtrl.text.isNotEmpty && cellCtrl.text.isNotEmpty && drugCtrl.text.isNotEmpty) {
+                
+                // ✅ เรียกใช้ฟังก์ชัน updateProjectDetails แบบส่งครบ 5 ค่า
+                await DatabaseService().updateProjectDetails(
+                  projectId,
+                  nameCtrl.text.trim(),
+                  descCtrl.text.trim(), // ส่ง description
+                  cellCtrl.text.trim(),
+                  drugCtrl.text.trim()
+                );
+                
+                if (ctx.mounted) Navigator.pop(ctx);
+              }
+            },
+            child: const Text("Save"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTextField(TextEditingController ctrl, String label) {
+    return TextField(
+      controller: ctrl,
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(color: Colors.cyanAccent),
+        enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white30)),
+        focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.cyanAccent)),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,27 +98,59 @@ class ProjectDetailScreen extends StatelessWidget {
         body: NestedScrollView(
           headerSliverBuilder: (context, innerBoxIsScrolled) {
             return [
-              SliverAppBar(
-                title: Column(
-                  children: [
-                    Text(projectName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    Text("$cellLine : $drugName", style: const TextStyle(color: Colors.cyanAccent, fontSize: 12)),
-                  ],
-                ),
-                centerTitle: true,
-                backgroundColor: const Color(0xFF0F2027),
-                pinned: true,
-                floating: true,
-                snap: true,
-                elevation: 0,
-                iconTheme: const IconThemeData(color: Colors.cyanAccent),
-                bottom: const TabBar(
-                  indicatorColor: Colors.cyanAccent,
-                  labelColor: Colors.cyanAccent,
-                  unselectedLabelColor: Colors.white54,
-                  indicatorWeight: 3,
-                  tabs: [Tab(icon: Icon(Icons.show_chart), text: "Analytics"), Tab(icon: Icon(Icons.table_chart), text: "Data Logs")],
-                ),
+              // ✅ ใช้ StreamBuilder ดึงข้อมูลโปรเจค เพื่อให้เวลาแก้แล้วชื่อเปลี่ยนทันที
+              StreamBuilder<DocumentSnapshot>(
+                // ⚠️ หมายเหตุ: ตรวจสอบ path นี้ให้ตรงกับที่ DatabaseService ใช้นะครับ 
+                // ถ้า DatabaseService เก็บที่ users -> uid -> projects ต้องแก้ path ตรงนี้ให้ตรงกัน
+                stream: FirebaseFirestore.instance.collection('projects').doc(projectId).snapshots(),
+                builder: (context, snapshot) {
+                  // ค่า Default ถ้าโหลดไม่ได้ ให้ใช้ค่าที่ส่งเข้ามาตอนแรก
+                  String dName = projectName;
+                  String dDesc = ""; // ค่าเริ่มต้น Description
+                  String dCell = cellLine;
+                  String dDrug = drugName;
+
+                  if (snapshot.hasData && snapshot.data!.exists) {
+                    var data = snapshot.data!.data() as Map<String, dynamic>;
+                    dName = data['projectName'] ?? data['name'] ?? dName; // เช็คทั้ง projectName และ name กันพลาด
+                    dDesc = data['description'] ?? dDesc; // ✅ ดึง Description
+                    dCell = data['cellLine'] ?? dCell;
+                    dDrug = data['drugName'] ?? dDrug;
+                  }
+
+                  return SliverAppBar(
+                    title: Column(
+                      children: [
+                        Text(dName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        // ✅ แสดง Description เล็กๆ ถ้ามี
+                        if (dDesc.isNotEmpty)
+                          Text(dDesc, style: const TextStyle(color: Colors.white70, fontSize: 10)),
+                        Text("$dCell : $dDrug", style: const TextStyle(color: Colors.cyanAccent, fontSize: 12)),
+                      ],
+                    ),
+                    centerTitle: true,
+                    backgroundColor: const Color(0xFF0F2027),
+                    pinned: true,
+                    floating: true,
+                    snap: true,
+                    elevation: 0,
+                    iconTheme: const IconThemeData(color: Colors.cyanAccent),
+                    // ✅ ปุ่มแก้ไข ส่งค่าครบถ้วนรวม Description
+                    actions: [
+                      IconButton(
+                        icon: const Icon(Icons.edit, color: Colors.cyanAccent),
+                        onPressed: () => _showEditProjectDialog(context, dName, dDesc, dCell, dDrug),
+                      ),
+                    ],
+                    bottom: const TabBar(
+                      indicatorColor: Colors.cyanAccent,
+                      labelColor: Colors.cyanAccent,
+                      unselectedLabelColor: Colors.white54,
+                      indicatorWeight: 3,
+                      tabs: [Tab(icon: Icon(Icons.show_chart), text: "Analytics"), Tab(icon: Icon(Icons.table_chart), text: "Data Logs")],
+                    ),
+                  );
+                }
               ),
             ];
           },
@@ -73,7 +176,7 @@ class ProjectDetailScreen extends StatelessWidget {
           icon: const Icon(Icons.add_a_photo),
           label: const Text("Add Data", style: TextStyle(fontWeight: FontWeight.bold)),
           onPressed: () {
-            // ส่งค่า Fixed ไปหน้า Upload
+            // ส่งค่า Fixed ไปหน้า Upload (ถ้าจะให้ดีควรดึงค่าล่าสุดจาก Stream แต่ส่งค่าเดิมก็ใช้ได้ครับ)
             Navigator.push(context, MaterialPageRoute(
               builder: (_) => UploadScreen(projectId: projectId, cellLine: cellLine, drugName: drugName)
             ));
@@ -83,6 +186,7 @@ class ProjectDetailScreen extends StatelessWidget {
     );
   }
 
+  // ... (ส่วนกราฟและ Logs คงเดิม) ...
   Widget _buildGraphsView(List<QueryDocumentSnapshot> docs) {
     List<FlSpot> countSpots = [];
     List<FlSpot> sizeSpots = [];

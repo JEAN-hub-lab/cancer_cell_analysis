@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'package:path/path.dart' as path; // 👈 1. ต้อง import ตัวนี้เพิ่มเพื่อเช็คสกุลไฟล์
 import 'processing_screen.dart';
 
 class UploadScreen extends StatefulWidget {
@@ -9,7 +10,7 @@ class UploadScreen extends StatefulWidget {
   final String drugName;
 
   const UploadScreen({
-    super.key, 
+    super.key,
     required this.projectId,
     required this.cellLine,
     required this.drugName,
@@ -27,7 +28,11 @@ class _UploadScreenState extends State<UploadScreen> {
 
   Future<void> _pickImage(ImageSource source) async {
     final pickedFile = await _picker.pickImage(source: source);
-    if (pickedFile != null) setState(() => _image = File(pickedFile.path));
+    if (pickedFile != null) {
+      setState(() {
+        _image = File(pickedFile.path);
+      });
+    }
   }
 
   void _submit() {
@@ -37,7 +42,7 @@ class _UploadScreenState extends State<UploadScreen> {
         MaterialPageRoute(
           builder: (context) => ProcessingScreen(
             projectId: widget.projectId,
-            imageFile: _image!,
+            imageFile: _image!, // ส่งไฟล์ .tiff ดิบๆ ไปเลย (หน้า Processing จะแปลงให้เอง)
             cellLine: widget.cellLine,
             drugName: widget.drugName,
             concentration: _concentrationController.text,
@@ -51,27 +56,30 @@ class _UploadScreenState extends State<UploadScreen> {
     }
   }
 
+  // ฟังก์ชันเช็คว่าเป็นไฟล์ TIFF หรือไม่
+  bool get _isTiff {
+    if (_image == null) return false;
+    String ext = path.extension(_image!.path).toLowerCase();
+    return ext == '.tiff' || ext == '.tif';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       extendBodyBehindAppBar: true,
-      // 🟢 1. กันเหนียว: ตั้งสีพื้นหลัง Scaffold เป็นสีเข้มด้วย (เผื่อมีช่องว่างโผล่)
       backgroundColor: const Color(0xFF0F2027),
-      
       appBar: AppBar(
         title: const Text("Add Data Point", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.transparent,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.cyanAccent),
       ),
-      
-      // 🟢 2. ใช้ Stack เพื่อแยกพื้นหลังออกจากเนื้อหา
       body: Stack(
         children: [
-          // Layer 1: พื้นหลัง (บังคับให้เต็มจอเสมอ ไม่ว่าจะเนื้อหาสั้นหรือยาว)
+          // Layer 1: พื้นหลัง
           Container(
-            height: double.infinity, // เต็มความสูงจอ
-            width: double.infinity,  // เต็มความกว้างจอ
+            height: double.infinity,
+            width: double.infinity,
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft, end: Alignment.bottomRight,
@@ -80,9 +88,9 @@ class _UploadScreenState extends State<UploadScreen> {
             ),
           ),
           
-          // Layer 2: เนื้อหา (เลื่อนขึ้นลงได้)
+          // Layer 2: เนื้อหา
           SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 100, 24, 40), // เพิ่ม Padding ล่างเผื่อจอยาว
+            padding: const EdgeInsets.fromLTRB(24, 100, 24, 40),
             child: Form(
               key: _formKey,
               child: Column(
@@ -91,7 +99,7 @@ class _UploadScreenState extends State<UploadScreen> {
                   Container(
                     padding: const EdgeInsets.all(15),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.08), 
+                      color: Colors.white.withOpacity(0.08),
                       borderRadius: BorderRadius.circular(15),
                       border: Border.all(color: Colors.white.withOpacity(0.1)),
                     ),
@@ -113,7 +121,7 @@ class _UploadScreenState extends State<UploadScreen> {
                       labelText: "Concentration (µM)",
                       labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
                       prefixIcon: const Icon(Icons.science, color: Colors.cyanAccent),
-                      filled: true, 
+                      filled: true,
                       fillColor: Colors.white.withOpacity(0.05),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                     ),
@@ -129,18 +137,12 @@ class _UploadScreenState extends State<UploadScreen> {
                         color: Colors.white.withOpacity(0.05),
                         borderRadius: BorderRadius.circular(15),
                         border: Border.all(color: Colors.cyanAccent.withOpacity(0.3), style: BorderStyle.solid),
-                        image: _image != null ? DecorationImage(image: FileImage(_image!), fit: BoxFit.cover) : null,
+                        // 👈 2. แก้ตรงนี้: ถ้าเป็น TIFF จะไม่โชว์รูป (เพราะ Flutter เรนเดอร์ไม่ได้)
+                        image: (_image != null && !_isTiff) 
+                            ? DecorationImage(image: FileImage(_image!), fit: BoxFit.cover) 
+                            : null,
                       ),
-                      child: _image == null
-                          ? const Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.add_a_photo, size: 50, color: Colors.white30),
-                                SizedBox(height: 10),
-                                Text("Tap to upload image", style: TextStyle(color: Colors.white30)),
-                              ],
-                            )
-                          : null,
+                      child: _buildImagePlaceholder(), // 👈 3. ใช้ฟังก์ชันสร้าง Child แทน
                     ),
                   ),
                   const SizedBox(height: 30),
@@ -162,6 +164,34 @@ class _UploadScreenState extends State<UploadScreen> {
         ],
       ),
     );
+  }
+
+  // ฟังก์ชันสำหรับแสดงผลในกล่องรูปภาพ
+  Widget _buildImagePlaceholder() {
+    if (_image == null) {
+      return const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.add_a_photo, size: 50, color: Colors.white30),
+          SizedBox(height: 10),
+          Text("Tap to upload image", style: TextStyle(color: Colors.white30)),
+        ],
+      );
+    } else if (_isTiff) {
+      // 👈 4. ถ้าเป็น TIFF ให้โชว์ไอคอนไฟล์แทนรูป
+      return Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.insert_drive_file, size: 50, color: Colors.yellowAccent),
+          const SizedBox(height: 10),
+          const Text("TIFF File Selected", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          Text(path.basename(_image!.path), style: const TextStyle(color: Colors.white54, fontSize: 12)),
+          const SizedBox(height: 5),
+          const Text("(Preview not available)", style: TextStyle(color: Colors.white30, fontSize: 10)),
+        ],
+      );
+    }
+    return const SizedBox(); // กรณีเป็น JPG/PNG มันจะโชว์ที่ DecorationImage แล้ว
   }
 
   Widget _infoRow(IconData icon, String l, String v) => Row(

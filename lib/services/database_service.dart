@@ -25,21 +25,45 @@ class DatabaseService {
   // 2. Read Projects
   Stream<QuerySnapshot> getProjects() {
     if (uid.isEmpty) return const Stream.empty();
-    return _db.collection('users').doc(uid).collection('projects')
-        .orderBy('createdAt', descending: true).snapshots();
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('projects')
+        .orderBy('createdAt', descending: true)
+        .snapshots();
   }
 
   // 3. Update Project
-  Future<void> updateProject(String projectId, String newName, String newDescription) async {
-    await _db.collection('users').doc(uid).collection('projects').doc(projectId).update({
-      'name': newName,
-      'description': newDescription,
-    });
+  // ✅ อันใหม่ (ฉบับอัปเกรด แก้ได้ครบ 4 ค่า)
+  Future<void> updateProjectDetails(
+    String projectId,
+    String name,
+    String description, // เพิ่มตัวนี้
+    String cellLine,
+    String drugName,
+  ) async {
+    await _db
+        .collection('users')
+        .doc(uid)
+        .collection('projects')
+        .doc(projectId)
+        .update({
+          'name': name, // ใช้ key 'name' ตาม Database เดิมของคุณ
+          'description':
+              description, // ใช้ key 'description' ตาม Database เดิมของคุณ
+          'cellLine': cellLine,
+          'drugName': drugName,
+        });
   }
 
   // 4. Delete Project
   Future<void> deleteProject(String projectId) async {
-    await _db.collection('users').doc(uid).collection('projects').doc(projectId).delete();
+    await _db
+        .collection('users')
+        .doc(uid)
+        .collection('projects')
+        .doc(projectId)
+        .delete();
   }
 
   // 5. Save Experiment Data (บันทึกผลการทดลอง)
@@ -50,25 +74,53 @@ class DatabaseService {
     required int colonyCount,
     required double avgSize,
   }) async {
-    await _db.collection('users').doc(uid).collection('projects').doc(projectId)
-        .collection('experiments').add({
-      'drugName': drugName,
-      'concentration': concentration,
-      'colonyCount': colonyCount,
-      'avgSize': avgSize,
-      'timestamp': FieldValue.serverTimestamp(),
-    });
+    await _db
+        .collection('users')
+        .doc(uid)
+        .collection('projects')
+        .doc(projectId)
+        .collection('experiments')
+        .add({
+          'drugName': drugName,
+          'concentration': concentration,
+          'colonyCount': colonyCount,
+          'avgSize': avgSize,
+          'timestamp': FieldValue.serverTimestamp(),
+        });
   }
 
   // 6. Get Experiment Data
   Stream<QuerySnapshot> getProjectData(String projectId) {
-    return _db.collection('users').doc(uid).collection('projects').doc(projectId)
-        .collection('experiments').orderBy('concentration').snapshots();
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('projects')
+        .doc(projectId)
+        .collection('experiments')
+        .orderBy('concentration')
+        .snapshots();
   }
 
   // 7. Delete Experiment Data
   Future<void> deleteExperimentData(String projectId, String documentId) async {
-    await _db.collection('users').doc(uid).collection('projects').doc(projectId)
-        .collection('experiments').doc(documentId).delete();
+    await _db
+        .collection('users')
+        .doc(uid)
+        .collection('projects')
+        .doc(projectId)
+        .collection('experiments')
+        .doc(documentId)
+        .delete();
   }
+
+  // 8. Update User Profile (เพิ่มอันนี้!)
+  Future<void> updateUserProfile(String newUsername) async {
+    if (uid.isEmpty) return;
+    await _db.collection('users').doc(uid).update({
+      'username': newUsername,
+      // 'photoUrl': ... (ถ้าอนาคตทำระบบอัปโหลดรูป ให้มาเพิ่มตรงนี้)
+    });
+  }
+
+  // ในไฟล์ services/database_service.dart
 }

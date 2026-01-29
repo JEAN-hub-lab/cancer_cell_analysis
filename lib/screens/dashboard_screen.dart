@@ -43,9 +43,13 @@ class DashboardScreen extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(20, 100, 20, 80),
               itemBuilder: (context, index) {
                 var p = projects[index];
-                // ดึงข้อมูล Cell/Drug (ถ้าเป็นโปรเจกต์เก่าที่ไม่มี key นี้ ให้ใส่ค่า Default)
-                String pCellLine = (p.data() as Map).containsKey('cellLine') ? p['cellLine'] : 'Unknown Cell';
-                String pDrugName = (p.data() as Map).containsKey('drugName') ? p['drugName'] : 'Unknown Drug';
+                var data = p.data() as Map<String, dynamic>;
+
+                // ดึงข้อมูลแบบปลอดภัย (Handle กรณี key ไม่ตรง หรือเป็นโปรเจคเก่า)
+                String pName = data['projectName'] ?? data['name'] ?? 'Unnamed Project';
+                String pDesc = data['description'] ?? '';
+                String pCellLine = data['cellLine'] ?? 'Unknown Cell';
+                String pDrugName = data['drugName'] ?? 'Unknown Drug';
 
                 return Dismissible(
                   key: Key(p.id),
@@ -67,13 +71,17 @@ class DashboardScreen extends StatelessWidget {
                     decoration: BoxDecoration(color: Colors.white.withOpacity(0.08), borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.white.withOpacity(0.1))),
                     child: ListTile(
                       contentPadding: const EdgeInsets.all(15),
-                      title: Text(p['name'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+                      title: Text(pName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(p['description'], maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70)),
+                          // แสดง Description
+                          if (pDesc.isNotEmpty)
+                             Text(pDesc, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70)),
+                          
                           const SizedBox(height: 5),
-                          // โชว์ Tag เล็กๆ ให้รู้ว่าเป็นยาตัวไหน
+                          
+                          // แสดง Tag ยา/เชื้อ
                           Row(
                             children: [
                               _miniTag(Icons.biotech, pCellLine),
@@ -86,16 +94,17 @@ class DashboardScreen extends StatelessWidget {
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          // ปุ่มแก้ไข (เรียก Dialog ตัวใหม่ที่แก้ได้ครบ)
                           IconButton(icon: const Icon(Icons.edit, color: Colors.cyanAccent), onPressed: () => _showEditProjectDialog(context, db, p)),
                           const Icon(Icons.arrow_forward_ios, color: Colors.white12, size: 16),
                         ],
                       ),
                       onTap: () {
-                        // ส่งข้อมูลไปหน้า Detail เพื่อเตรียมส่งต่อให้หน้า Upload
+                        // ส่งข้อมูลไปหน้า Detail
                         Navigator.push(context, MaterialPageRoute(
                           builder: (_) => ProjectDetailScreen(
                             projectId: p.id, 
-                            projectName: p['name'],
+                            projectName: pName,
                             cellLine: pCellLine,
                             drugName: pDrugName,
                           )
@@ -140,7 +149,7 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  // Dialog สร้างโปรเจกต์ (มี 4 ช่องแล้ว)
+  // Dialog สร้างโปรเจกต์ (มี 4 ช่องครบแล้ว)
   void _showAddProjectDialog(BuildContext context, DatabaseService db) {
      final nameCtrl = TextEditingController();
      final descCtrl = TextEditingController();
@@ -171,11 +180,12 @@ class DashboardScreen extends StatelessWidget {
             style: ElevatedButton.styleFrom(backgroundColor: Colors.cyanAccent, foregroundColor: Colors.black),
             onPressed: () {
               if (nameCtrl.text.isNotEmpty && cellCtrl.text.isNotEmpty) {
+                // เรียก createProject (ตรวจสอบให้แน่ใจว่า DatabaseService มีฟังก์ชันนี้ที่รับ parameter ครบนะ)
                 db.createProject(
-                  name: nameCtrl.text, 
-                  description: descCtrl.text,
-                  cellLine: cellCtrl.text,
-                  drugName: drugCtrl.text,
+                  name: nameCtrl.text.trim(), 
+                  description: descCtrl.text.trim(),
+                  cellLine: cellCtrl.text.trim(),
+                  drugName: drugCtrl.text.trim(),
                 );
                 Navigator.pop(ctx);
               }
@@ -187,18 +197,51 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
+  // ✅ แก้ไขส่วนนี้: ให้ฟังก์ชัน Edit มี 4 ช่อง และเรียก updateProjectDetails แบบใหม่
   void _showEditProjectDialog(BuildContext context, DatabaseService db, DocumentSnapshot doc) {
-     final nameCtrl = TextEditingController(text: doc['name']);
-     final descCtrl = TextEditingController(text: doc['description']);
+     var data = doc.data() as Map<String, dynamic>;
+     // ดึงค่าเดิมมาใส่ Controller (ดัก null ไว้ด้วย)
+     final nameCtrl = TextEditingController(text: data['projectName'] ?? data['name']);
+     final descCtrl = TextEditingController(text: data['description'] ?? '');
+     final cellCtrl = TextEditingController(text: data['cellLine'] ?? '');
+     final drugCtrl = TextEditingController(text: data['drugName'] ?? '');
+
      showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF203A43),
         title: const Text("Edit Project", style: TextStyle(color: Colors.white)),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [_buildTextField(nameCtrl, "Project Name"), _buildTextField(descCtrl, "Description")]),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min, 
+            children: [
+              _buildTextField(nameCtrl, "Project Name"), 
+              _buildTextField(descCtrl, "Description"),
+              const SizedBox(height: 10),
+              _buildTextField(cellCtrl, "Cell Line"),
+              _buildTextField(drugCtrl, "Drug Name"),
+            ]
+          ),
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel", style: TextStyle(color: Colors.white54))),
-          ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.orangeAccent, foregroundColor: Colors.black), onPressed: () { if (nameCtrl.text.isNotEmpty) { db.updateProject(doc.id, nameCtrl.text, descCtrl.text); Navigator.pop(ctx); } }, child: const Text("Update"))
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orangeAccent, foregroundColor: Colors.black), 
+            onPressed: () { 
+              if (nameCtrl.text.isNotEmpty) { 
+                // ✅ เรียกใช้ฟังก์ชันใหม่ที่รับ 5 ค่า (ID + 4 ข้อมูล)
+                db.updateProjectDetails(
+                  doc.id, 
+                  nameCtrl.text.trim(), 
+                  descCtrl.text.trim(),
+                  cellCtrl.text.trim(),
+                  drugCtrl.text.trim()
+                ); 
+                Navigator.pop(ctx); 
+              } 
+            }, 
+            child: const Text("Update")
+          )
         ],
       ),
     );
