@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/database_service.dart';
 import 'project_detail_screen.dart';
+import '../utils/validator.dart'; // ✅ อย่าลืมย้ายไฟล์ validator.dart ไปไว้ใน lib/utils นะครับ
 import 'dart:ui';
 
 class DashboardScreen extends StatelessWidget {
@@ -45,7 +46,6 @@ class DashboardScreen extends StatelessWidget {
                 var p = projects[index];
                 var data = p.data() as Map<String, dynamic>;
 
-                // ดึงข้อมูลแบบปลอดภัย (Handle กรณี key ไม่ตรง หรือเป็นโปรเจคเก่า)
                 String pName = data['projectName'] ?? data['name'] ?? 'Unnamed Project';
                 String pDesc = data['description'] ?? '';
                 String pCellLine = data['cellLine'] ?? 'Unknown Cell';
@@ -75,13 +75,9 @@ class DashboardScreen extends StatelessWidget {
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // แสดง Description
                           if (pDesc.isNotEmpty)
                              Text(pDesc, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70)),
-                          
                           const SizedBox(height: 5),
-                          
-                          // แสดง Tag ยา/เชื้อ
                           Row(
                             children: [
                               _miniTag(Icons.biotech, pCellLine),
@@ -94,13 +90,11 @@ class DashboardScreen extends StatelessWidget {
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // ปุ่มแก้ไข (เรียก Dialog ตัวใหม่ที่แก้ได้ครบ)
                           IconButton(icon: const Icon(Icons.edit, color: Colors.cyanAccent), onPressed: () => _showEditProjectDialog(context, db, p)),
                           const Icon(Icons.arrow_forward_ios, color: Colors.white12, size: 16),
                         ],
                       ),
                       onTap: () {
-                        // ส่งข้อมูลไปหน้า Detail
                         Navigator.push(context, MaterialPageRoute(
                           builder: (_) => ProjectDetailScreen(
                             projectId: p.id, 
@@ -149,8 +143,9 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  // Dialog สร้างโปรเจกต์ (มี 4 ช่องครบแล้ว)
+  // ✅ Dialog สร้างโปรเจกต์ (มี Validation)
   void _showAddProjectDialog(BuildContext context, DatabaseService db) {
+     final formKey = GlobalKey<FormState>(); // Key สำหรับเช็ค Form
      final nameCtrl = TextEditingController();
      final descCtrl = TextEditingController();
      final cellCtrl = TextEditingController();
@@ -162,16 +157,19 @@ class DashboardScreen extends StatelessWidget {
         backgroundColor: const Color(0xFF203A43),
         title: const Text("New Research Project", style: TextStyle(color: Colors.white)),
         content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildTextField(nameCtrl, "Project Name"),
-              _buildTextField(descCtrl, "Description"),
-              const Divider(color: Colors.white24),
-              const Text("Setup (Fixed)", style: TextStyle(color: Colors.cyanAccent, fontSize: 12)),
-              _buildTextField(cellCtrl, "Cell Line (e.g. A549)"),
-              _buildTextField(drugCtrl, "Drug Name (e.g. Isalpinin)"),
-            ],
+          child: Form( // ครอบด้วย Form
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildValidatedField(nameCtrl, "Project Name", (v) => Validator.validateRequired(v, "Project Name")),
+                _buildValidatedField(descCtrl, "Description", null), // ไม่บังคับ
+                const Divider(color: Colors.white24),
+                const Text("Setup (Fixed)", style: TextStyle(color: Colors.cyanAccent, fontSize: 12)),
+                _buildValidatedField(cellCtrl, "Cell Line (e.g. A549)", (v) => Validator.validateRequired(v, "Cell Line")),
+                _buildValidatedField(drugCtrl, "Drug Name (e.g. Isalpinin)", (v) => Validator.validateRequired(v, "Drug Name")),
+              ],
+            ),
           ),
         ),
         actions: [
@@ -179,8 +177,8 @@ class DashboardScreen extends StatelessWidget {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.cyanAccent, foregroundColor: Colors.black),
             onPressed: () {
-              if (nameCtrl.text.isNotEmpty && cellCtrl.text.isNotEmpty) {
-                // เรียก createProject (ตรวจสอบให้แน่ใจว่า DatabaseService มีฟังก์ชันนี้ที่รับ parameter ครบนะ)
+              // ✅ สั่งเช็คความถูกต้อง
+              if (formKey.currentState!.validate()) {
                 db.createProject(
                   name: nameCtrl.text.trim(), 
                   description: descCtrl.text.trim(),
@@ -197,10 +195,11 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  // ✅ แก้ไขส่วนนี้: ให้ฟังก์ชัน Edit มี 4 ช่อง และเรียก updateProjectDetails แบบใหม่
+  // ✅ Dialog แก้ไขโปรเจกต์ (มี Validation)
   void _showEditProjectDialog(BuildContext context, DatabaseService db, DocumentSnapshot doc) {
      var data = doc.data() as Map<String, dynamic>;
-     // ดึงค่าเดิมมาใส่ Controller (ดัก null ไว้ด้วย)
+     final formKey = GlobalKey<FormState>(); // Key สำหรับเช็ค Form
+     
      final nameCtrl = TextEditingController(text: data['projectName'] ?? data['name']);
      final descCtrl = TextEditingController(text: data['description'] ?? '');
      final cellCtrl = TextEditingController(text: data['cellLine'] ?? '');
@@ -212,15 +211,18 @@ class DashboardScreen extends StatelessWidget {
         backgroundColor: const Color(0xFF203A43),
         title: const Text("Edit Project", style: TextStyle(color: Colors.white)),
         content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min, 
-            children: [
-              _buildTextField(nameCtrl, "Project Name"), 
-              _buildTextField(descCtrl, "Description"),
-              const SizedBox(height: 10),
-              _buildTextField(cellCtrl, "Cell Line"),
-              _buildTextField(drugCtrl, "Drug Name"),
-            ]
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min, 
+              children: [
+                _buildValidatedField(nameCtrl, "Project Name", (v) => Validator.validateRequired(v, "Project Name")), 
+                _buildValidatedField(descCtrl, "Description", null),
+                const SizedBox(height: 10),
+                _buildValidatedField(cellCtrl, "Cell Line", (v) => Validator.validateRequired(v, "Cell Line")),
+                _buildValidatedField(drugCtrl, "Drug Name", (v) => Validator.validateRequired(v, "Drug Name")),
+              ]
+            ),
           ),
         ),
         actions: [
@@ -228,8 +230,7 @@ class DashboardScreen extends StatelessWidget {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.orangeAccent, foregroundColor: Colors.black), 
             onPressed: () { 
-              if (nameCtrl.text.isNotEmpty) { 
-                // ✅ เรียกใช้ฟังก์ชันใหม่ที่รับ 5 ค่า (ID + 4 ข้อมูล)
+              if (formKey.currentState!.validate()) { 
                 db.updateProjectDetails(
                   doc.id, 
                   nameCtrl.text.trim(), 
@@ -247,7 +248,23 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildTextField(TextEditingController ctrl, String label) {
-    return Padding(padding: const EdgeInsets.only(bottom: 10), child: TextField(controller: ctrl, style: const TextStyle(color: Colors.white), decoration: InputDecoration(labelText: label, labelStyle: const TextStyle(color: Colors.cyanAccent), enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white30)), focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.cyanAccent)))));
+  // ✅ Widget สร้างช่องกรอกแบบมีตัวตรวจสอบ (TextFormField)
+  Widget _buildValidatedField(TextEditingController ctrl, String label, String? Function(String?)? validator) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 15),
+      child: TextFormField(
+        controller: ctrl,
+        validator: validator, // ใส่ฟังก์ชันตรวจสอบ
+        autovalidateMode: AutovalidateMode.onUserInteraction, // เช็คทันทีที่พิมพ์
+        style: const TextStyle(color: Colors.white),
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: const TextStyle(color: Colors.cyanAccent),
+          enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white30)),
+          focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.cyanAccent)),
+          errorStyle: const TextStyle(color: Colors.redAccent), // สีข้อความแจ้งเตือน
+        ),
+      ),
+    );
   }
 }

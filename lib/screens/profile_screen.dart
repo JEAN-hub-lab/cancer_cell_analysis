@@ -1,8 +1,12 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import '../services/auth_service.dart';
 import '../services/database_service.dart';
-import 'dart:ui';
+import '../services/local_database_service.dart';
+import 'settings_screen.dart'; 
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -14,63 +18,92 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final DatabaseService _db = DatabaseService();
   final AuthService _auth = AuthService();
+  File? _localImageFile;
 
-  // ฟังก์ชันโชว์ Dialog แก้ไขชื่อ
-  void _showEditProfileDialog(BuildContext context, String currentName) {
+  @override
+  void initState() {
+    super.initState();
+    _loadLocalImage();
+  }
+
+  Future<void> _loadLocalImage() async {
+    final user = _auth.currentUser;
+    if (user != null) {
+      String? savedPath = await LocalDatabaseService.instance.getProfileImage(user.uid);
+      if (savedPath != null) {
+        File imgFile = File(savedPath);
+        if (await imgFile.exists()) {
+          setState(() {
+            _localImageFile = imgFile;
+          });
+        }
+      }
+    }
+  }
+
+  Future<void> _pickAndSaveImage() async {
+    final picker = ImagePicker();
+    final XFile? pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    if (pickedFile == null) return;
+
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    try {
+      final appDir = await getApplicationDocumentsDirectory();
+      final fileName = 'profile_${user.uid}.jpg';
+      final savedImage = await File(pickedFile.path).copy('${appDir.path}/$fileName');
+      await LocalDatabaseService.instance.saveProfileImage(user.uid, savedImage.path);
+
+      setState(() {
+        _localImageFile = savedImage;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Profile picture updated locally!"), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Failed to save image"), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
+  }
+
+  void _showEditUsernameDialog(BuildContext context, String currentName) {
     final nameCtrl = TextEditingController(text: currentName);
-
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF203A43),
-        title: const Text("Edit Profile", style: TextStyle(color: Colors.white)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameCtrl,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: "Username",
-                labelStyle: TextStyle(color: Colors.cyanAccent),
-                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white30)),
-                focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.cyanAccent)),
-              ),
-            ),
-          ],
+        title: const Text("Edit Username", style: TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: nameCtrl,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(
+            labelText: "Username",
+            labelStyle: TextStyle(color: Colors.cyanAccent),
+            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white30)),
+            focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.cyanAccent)),
+          ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancel", style: TextStyle(color: Colors.white54)),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel", style: TextStyle(color: Colors.white54))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.cyanAccent, foregroundColor: Colors.black),
             onPressed: () async {
               if (nameCtrl.text.isNotEmpty) {
-                // ✅ บันทึกลง Database จริงๆ
-                await _db.updateUserProfile(nameCtrl.text.trim());
+                await _db.updateUserProfile(username: nameCtrl.text.trim());
                 if (ctx.mounted) Navigator.pop(ctx);
-                
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Profile Updated!"), backgroundColor: Colors.green),
-                );
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Username updated!"), backgroundColor: Colors.green));
               }
             },
             child: const Text("Save"),
           ),
         ],
-      ),
-    );
-  }
-
-  // ฟังก์ชันสำหรับปุ่มที่ยังไม่ทำ (กดแล้วให้ขึ้นเตือนว่า Coming Soon)
-  void _showComingSoon(BuildContext context, String feature) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("$feature is coming soon!"), 
-        backgroundColor: Colors.white24,
-        duration: const Duration(seconds: 1),
       ),
     );
   }
@@ -84,14 +117,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
+        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings, color: Colors.white70),
-            onPressed: () => _showComingSoon(context, "Settings"),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen())),
           )
         ],
       ),
@@ -108,7 +138,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ? const Center(child: Text("No User Logged In", style: TextStyle(color: Colors.white)))
             : SingleChildScrollView(
                 padding: const EdgeInsets.only(top: 100, bottom: 40),
-                // ✅ ใช้ StreamBuilder แทน FutureBuilder เพื่อให้แก้ปุ๊บเปลี่ยนปั๊บ
                 child: StreamBuilder<DocumentSnapshot>(
                   stream: FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots(),
                   builder: (context, snapshot) {
@@ -117,123 +146,68 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     var userData = snapshot.data!.data() as Map<String, dynamic>;
                     String username = userData['username'] ?? 'Researcher';
                     String email = userData['email'] ?? '-';
-                    String joinedDate = "Member since 2024"; 
 
                     return Column(
                       children: [
-                        // 1. Profile Header
                         Stack(
                           alignment: Alignment.center,
                           children: [
-                            // Glow Effect
-                            Container(
-                              width: 130, height: 130,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(color: Colors.cyanAccent.withOpacity(0.4), blurRadius: 20, spreadRadius: 5),
-                                ],
-                              ),
-                            ),
-                            // Profile Image
+                            Container(width: 130, height: 130, decoration: BoxDecoration(shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.cyanAccent.withOpacity(0.3), blurRadius: 20, spreadRadius: 5)])),
                             GestureDetector(
-                              onTap: () => _showComingSoon(context, "Change Avatar"),
-                              child: const CircleAvatar(
+                              onTap: _pickAndSaveImage,
+                              child: CircleAvatar(
                                 radius: 60,
-                                backgroundColor: Color(0xFF203A43),
-                                child: Icon(Icons.person, size: 70, color: Colors.cyanAccent),
+                                backgroundColor: const Color(0xFF203A43),
+                                backgroundImage: _localImageFile != null ? FileImage(_localImageFile!) : null,
+                                child: _localImageFile == null ? const Icon(Icons.person, size: 70, color: Colors.cyanAccent) : null,
                               ),
                             ),
-                            // Edit Icon (กดได้จริงแล้ว!)
-                            Positioned(
-                              bottom: 0,
-                              right: 0,
-                              child: GestureDetector(
-                                onTap: () => _showEditProfileDialog(context, username), // ✅ เชื่อมฟังก์ชัน
-                                child: Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: const BoxDecoration(
-                                    color: Colors.cyanAccent,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(Icons.edit, size: 20, color: Colors.black),
-                                ),
-                              ),
-                            )
                           ],
                         ),
                         const SizedBox(height: 20),
-                        
-                        // ชื่อและอีเมล
                         Text(username, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white)),
                         Text(email, style: const TextStyle(fontSize: 14, color: Colors.white54)),
-                        const SizedBox(height: 5),
-                        Text(joinedDate, style: const TextStyle(fontSize: 12, color: Colors.cyanAccent)),
-
                         const SizedBox(height: 30),
-
-                        // 2. Stats Dashboard (ดึงข้อมูลจริง)
+                        
+                        // Stats Section
                         StreamBuilder<QuerySnapshot>(
                           stream: _db.getProjects(), 
                           builder: (context, projectSnap) {
                             int projectCount = projectSnap.hasData ? projectSnap.data!.docs.length : 0;
                             return Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly, 
                               children: [
                                 _buildStatCard("Projects", "$projectCount", Icons.folder_open),
-                                _buildStatCard("Analyses", "0", Icons.analytics), 
-                                _buildStatCard("Status", "Active", Icons.verified_user),
-                              ],
+                                _buildStatCard("Status", "Active", Icons.verified_user)
+                              ]
                             );
                           }
                         ),
-
                         const SizedBox(height: 30),
 
-                        // 3. Menu Options (กดได้จริง)
+                        // Menu Options
                         Container(
                           margin: const EdgeInsets.symmetric(horizontal: 20),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.05),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: Colors.white10),
-                          ),
-                          child: Column(
-                            children: [
-                              _buildMenuItem(Icons.person_outline, "Edit Profile", 
-                                () => _showEditProfileDialog(context, username)), // ✅ แก้ชื่อได้
-                              _buildDivider(),
-                              _buildMenuItem(Icons.lock_outline, "Privacy & Security", 
-                                () => _showComingSoon(context, "Privacy")),
-                              _buildDivider(),
-                              _buildMenuItem(Icons.notifications_outlined, "Notifications", 
-                                () => _showComingSoon(context, "Notifications")),
-                              _buildDivider(),
-                              _buildMenuItem(Icons.help_outline, "Help & Support", 
-                                () => _showComingSoon(context, "Help Center")),
-                            ],
-                          ),
+                          decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white10)),
+                          child: Column(children: [
+                            _buildMenuItem(Icons.person_outline, "Edit Username", () => _showEditUsernameDialog(context, username)), 
+                            const Divider(height: 1, color: Colors.white10, indent: 70),
+                            _buildMenuItem(Icons.image_outlined, "Change Picture", _pickAndSaveImage), 
+                            const Divider(height: 1, color: Colors.white10, indent: 70),
+                            _buildMenuItem(Icons.settings_outlined, "App Settings", () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen()))),
+                          ]),
                         ),
+                        const SizedBox(height: 30),
 
-                        const SizedBox(height: 40),
-
-                        // 4. Logout Button
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 20),
                           child: ElevatedButton(
-                            onPressed: () {
-                              _auth.logout();
-                              Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.redAccent.withOpacity(0.1),
-                              foregroundColor: Colors.redAccent,
-                              minimumSize: const Size(double.infinity, 55),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                              side: BorderSide(color: Colors.redAccent.withOpacity(0.5)),
-                              elevation: 0,
-                            ),
-                            child: const Text("Log Out", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                            onPressed: () { 
+                              _auth.logout(); 
+                              Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false); 
+                            }, 
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent.withOpacity(0.1), foregroundColor: Colors.redAccent, minimumSize: const Size(double.infinity, 55), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)), side: const BorderSide(color: Colors.redAccent)), 
+                            child: const Text("Log Out", style: TextStyle(fontWeight: FontWeight.bold))
                           ),
                         ),
                       ],
@@ -246,39 +220,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildStatCard(String label, String value, IconData icon) {
-    return Container(
-      width: 100,
-      padding: const EdgeInsets.symmetric(vertical: 15),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.white10),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: Colors.cyanAccent, size: 24),
-          const SizedBox(height: 8),
-          Text(value, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-          Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12)),
-        ],
-      ),
-    );
+    return Container(width: 120, padding: const EdgeInsets.symmetric(vertical: 15), decoration: BoxDecoration(color: Colors.white.withOpacity(0.08), borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.white10)), child: Column(children: [Icon(icon, color: Colors.cyanAccent, size: 24), const SizedBox(height: 8), Text(value, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)), Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12))]));
   }
 
   Widget _buildMenuItem(IconData icon, String title, VoidCallback onTap) {
-    return ListTile(
-      leading: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(10)),
-        child: Icon(icon, color: Colors.white, size: 20),
-      ),
-      title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 16)),
-      trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white24, size: 16),
-      onTap: onTap,
-    );
-  }
-
-  Widget _buildDivider() {
-    return const Divider(height: 1, color: Colors.white10, indent: 70, endIndent: 20);
+    return ListTile(leading: Icon(icon, color: Colors.cyanAccent), title: Text(title, style: const TextStyle(color: Colors.white)), trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white24, size: 14), onTap: onTap);
   }
 }

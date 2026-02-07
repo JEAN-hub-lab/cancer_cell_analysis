@@ -70,7 +70,31 @@ class AuthService {
     }
   }
 
+  // 3. ออกจากระบบ
   Future<void> logout() async => await _auth.signOut();
   
+  // 4. ดึงข้อมูล User ปัจจุบัน
   User? get currentUser => _auth.currentUser;
+
+  // 5. ✅ เพิ่มฟังก์ชันลบบัญชี (Delete Account)
+  Future<void> deleteUserAccount() async {
+    User? user = _auth.currentUser;
+    if (user != null) {
+      try {
+        // 1. ลบข้อมูล User ใน Firestore ก่อน (Optional: เพื่อความสะอาดของ DB)
+        await _firestore.collection('users').doc(user.uid).delete();
+
+        // 2. ลบบัญชี Login ถาวร
+        await user.delete();
+      } on FirebaseAuthException catch (e) {
+        // กรณี Login ไว้นานเกินไป Firebase จะไม่ยอมให้ลบ (เพื่อความปลอดภัย)
+        if (e.code == 'requires-recent-login') {
+          throw "Please log out and log in again before deleting your account.";
+        }
+        throw e.message ?? "Failed to delete account";
+      } catch (e) {
+        throw e.toString();
+      }
+    }
+  }
 }

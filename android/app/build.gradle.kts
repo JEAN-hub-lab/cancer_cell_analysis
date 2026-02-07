@@ -4,7 +4,6 @@ plugins {
     id("com.google.gms.google-services")
     // END: FlutterFire Configuration
     id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
@@ -34,10 +33,14 @@ android {
     }
 
     buildTypes {
-        release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+        getByName("release") {
+            // ✅ ใช้ลายเซ็น Debug เพื่อให้ Build APK ได้เลยโดยไม่ต้องทำ Keystore
             signingConfig = signingConfigs.getByName("debug")
+            
+            // การตั้งค่าอื่นๆ ของ Release (ปิดการย่อโค้ดเพื่อป้องกัน Error)
+            isMinifyEnabled = false
+            isShrinkResources = false
+            proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro")
         }
     }
 }

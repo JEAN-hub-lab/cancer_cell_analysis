@@ -5,7 +5,7 @@ class DatabaseService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   String get uid => FirebaseAuth.instance.currentUser?.uid ?? '';
 
-  // 1. Create Project (เพิ่ม cellLine, drugName)
+  // 1. Create Project
   Future<void> createProject({
     required String name,
     required String description,
@@ -16,8 +16,8 @@ class DatabaseService {
     await _db.collection('users').doc(uid).collection('projects').add({
       'name': name,
       'description': description,
-      'cellLine': cellLine, // เก็บค่าคงที่ของโปรเจกต์
-      'drugName': drugName, // เก็บค่าคงที่ของโปรเจกต์
+      'cellLine': cellLine,
+      'drugName': drugName,
       'createdAt': FieldValue.serverTimestamp(),
     });
   }
@@ -34,11 +34,10 @@ class DatabaseService {
   }
 
   // 3. Update Project
-  // ✅ อันใหม่ (ฉบับอัปเกรด แก้ได้ครบ 4 ค่า)
   Future<void> updateProjectDetails(
     String projectId,
     String name,
-    String description, // เพิ่มตัวนี้
+    String description,
     String cellLine,
     String drugName,
   ) async {
@@ -48,9 +47,8 @@ class DatabaseService {
         .collection('projects')
         .doc(projectId)
         .update({
-          'name': name, // ใช้ key 'name' ตาม Database เดิมของคุณ
-          'description':
-              description, // ใช้ key 'description' ตาม Database เดิมของคุณ
+          'name': name,
+          'description': description,
           'cellLine': cellLine,
           'drugName': drugName,
         });
@@ -66,7 +64,7 @@ class DatabaseService {
         .delete();
   }
 
-  // 5. Save Experiment Data (บันทึกผลการทดลอง)
+  // 5. Save Experiment Data
   Future<void> saveExperimentData({
     required String projectId,
     required String drugName,
@@ -113,14 +111,18 @@ class DatabaseService {
         .delete();
   }
 
-  // 8. Update User Profile (เพิ่มอันนี้!)
-  Future<void> updateUserProfile(String newUsername) async {
+  // 8. ✅ Update User Profile (แก้ไขให้รองรับ Named Parameters และ photoUrl)
+  Future<void> updateUserProfile({String? username, String? photoUrl}) async {
     if (uid.isEmpty) return;
-    await _db.collection('users').doc(uid).update({
-      'username': newUsername,
-      // 'photoUrl': ... (ถ้าอนาคตทำระบบอัปโหลดรูป ให้มาเพิ่มตรงนี้)
-    });
-  }
 
-  // ในไฟล์ services/database_service.dart
+    Map<String, dynamic> dataToUpdate = {};
+    
+    // อัปเดตเฉพาะค่าที่ส่งมา (ไม่ส่งมาก็ไม่ทับของเดิม)
+    if (username != null) dataToUpdate['username'] = username;
+    if (photoUrl != null) dataToUpdate['photoUrl'] = photoUrl;
+
+    if (dataToUpdate.isNotEmpty) {
+      await _db.collection('users').doc(uid).update(dataToUpdate);
+    }
+  }
 }

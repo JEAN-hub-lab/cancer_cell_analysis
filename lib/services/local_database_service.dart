@@ -17,11 +17,12 @@ class LocalDatabaseService {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
 
+    // ถ้ามีการแก้ Structure Table อาจจะต้องเพิ่ม version เป็น 2 แต่ถ้าเพิ่งเริ่ม dev ใช้ 1 ได้ครับ
     return await openDatabase(path, version: 1, onCreate: _createDB);
   }
 
   Future _createDB(Database db, int version) async {
-    // สร้างตารางเก็บข้อมูล (Schema ต้องตรงกับที่เรา Save)
+    // 1. ตารางเก็บผลการทดลอง (อันเดิมของคุณ)
     await db.execute('''
       CREATE TABLE experiments ( 
         id INTEGER PRIMARY KEY AUTOINCREMENT, 
@@ -34,17 +35,58 @@ class LocalDatabaseService {
         timestamp TEXT
       )
     ''');
+
+    // 2. ✅ เพิ่มตารางเก็บรูปโปรไฟล์ (อันใหม่สำหรับ Hybrid Mode)
+    await db.execute('''
+      CREATE TABLE user_images (
+        uid TEXT PRIMARY KEY,
+        image_path TEXT
+      )
+    ''');
   }
 
-  // ฟังก์ชันบันทึก (Insert)
+  // ====================================================
+  // 🔬 ส่วนจัดการ Experiment Data (ของเดิม)
+  // ====================================================
+
   Future<int> insertExperiment(Map<String, dynamic> row) async {
     final db = await instance.database;
     return await db.insert('experiments', row);
   }
 
-  // ฟังก์ชันดึงข้อมูล (Query) - เผื่อเอาไปโชว์ตอนไม่มีเน็ต
   Future<List<Map<String, dynamic>>> getAllExperiments() async {
     final db = await instance.database;
     return await db.query('experiments', orderBy: 'timestamp DESC');
+  }
+
+  // ====================================================
+  // 👤 ส่วนจัดการ User Profile Image (เพิ่มใหม่)
+  // ====================================================
+
+  // บันทึก Path รูปภาพ (ถ้ามี UID นี้อยู่แล้วให้ทับเลย)
+  Future<void> saveProfileImage(String uid, String path) async {
+    final db = await instance.database;
+    await db.insert(
+      'user_images',
+      {'uid': uid, 'image_path': path},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  // ดึง Path รูปภาพ
+  Future<String?> getProfileImage(String uid) async {
+    final db = await instance.database;
+    final maps = await db.query(
+      'user_images',
+      columns: ['image_path'],
+      where: 'uid = ?',
+      whereArgs: [uid],
+    );
+
+    if (maps.isNotEmpty) {
+      return maps.first['image_path'] as String;
+    } else {
+      return null;
+    }
   }
 }

@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../services/database_service.dart';
 import 'upload_screen.dart';
 
 class ProjectDetailScreen extends StatelessWidget {
   final String projectId;
-  // ค่าพวกนี้รับมาเพื่อใช้เป็นค่าเริ่มต้นเฉยๆ แต่เราจะดึงใหม่จาก Stream เพื่อให้มันอัปเดตได้
   final String projectName;
   final String cellLine;
   final String drugName;
@@ -20,12 +20,10 @@ class ProjectDetailScreen extends StatelessWidget {
     required this.drugName,
   });
 
-  // ---------------------------------------------------------------------------
-  // ส่วนฟังก์ชันแก้ไขข้อมูล (Edit Dialog) - แก้ไขให้ครบเครื่อง
-  // ---------------------------------------------------------------------------
+  // ✅ แก้ไข Dialog ให้รองรับการอัปเดตข้อมูลที่แม่นยำ
   void _showEditProjectDialog(BuildContext context, String currentName, String currentDesc, String currentCell, String currentDrug) {
     final nameCtrl = TextEditingController(text: currentName);
-    final descCtrl = TextEditingController(text: currentDesc); // ✅ เพิ่ม Controller Description
+    final descCtrl = TextEditingController(text: currentDesc);
     final cellCtrl = TextEditingController(text: currentCell);
     final drugCtrl = TextEditingController(text: currentDrug);
 
@@ -34,13 +32,13 @@ class ProjectDetailScreen extends StatelessWidget {
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF203A43),
         title: const Text("Edit Project Details", style: TextStyle(color: Colors.white)),
-        content: SingleChildScrollView( // ใช้ ScrollView กันคีย์บอร์ดบัง
+        content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               _buildTextField(nameCtrl, "Project Name"),
               const SizedBox(height: 10),
-              _buildTextField(descCtrl, "Description"), // ✅ เพิ่มช่องกรอก Description
+              _buildTextField(descCtrl, "Description"),
               const SizedBox(height: 10),
               _buildTextField(cellCtrl, "Cell Line"),
               const SizedBox(height: 10),
@@ -49,24 +47,18 @@ class ProjectDetailScreen extends StatelessWidget {
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancel", style: TextStyle(color: Colors.white54)),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel", style: TextStyle(color: Colors.white54))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.cyanAccent, foregroundColor: Colors.black),
             onPressed: () async {
-              if (nameCtrl.text.isNotEmpty && cellCtrl.text.isNotEmpty && drugCtrl.text.isNotEmpty) {
-                
-                // ✅ เรียกใช้ฟังก์ชัน updateProjectDetails แบบส่งครบ 5 ค่า
+              if (nameCtrl.text.isNotEmpty) {
                 await DatabaseService().updateProjectDetails(
                   projectId,
                   nameCtrl.text.trim(),
-                  descCtrl.text.trim(), // ส่ง description
+                  descCtrl.text.trim(),
                   cellCtrl.text.trim(),
                   drugCtrl.text.trim()
                 );
-                
                 if (ctx.mounted) Navigator.pop(ctx);
               }
             },
@@ -92,37 +84,42 @@ class ProjectDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ดึง UID ของ User ปัจจุบัน
+    final String uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+
     return DefaultTabController(
       length: 2,
       child: Scaffold(
         body: NestedScrollView(
           headerSliverBuilder: (context, innerBoxIsScrolled) {
             return [
-              // ✅ ใช้ StreamBuilder ดึงข้อมูลโปรเจค เพื่อให้เวลาแก้แล้วชื่อเปลี่ยนทันที
+              // ✅ แก้ไข Stream ให้ชี้ไปที่ Path ของ User (ตาม DatabaseService)
               StreamBuilder<DocumentSnapshot>(
-                // ⚠️ หมายเหตุ: ตรวจสอบ path นี้ให้ตรงกับที่ DatabaseService ใช้นะครับ 
-                // ถ้า DatabaseService เก็บที่ users -> uid -> projects ต้องแก้ path ตรงนี้ให้ตรงกัน
-                stream: FirebaseFirestore.instance.collection('projects').doc(projectId).snapshots(),
+                stream: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(uid)
+                    .collection('projects')
+                    .doc(projectId)
+                    .snapshots(),
                 builder: (context, snapshot) {
-                  // ค่า Default ถ้าโหลดไม่ได้ ให้ใช้ค่าที่ส่งเข้ามาตอนแรก
                   String dName = projectName;
-                  String dDesc = ""; // ค่าเริ่มต้น Description
+                  String dDesc = "";
                   String dCell = cellLine;
                   String dDrug = drugName;
 
                   if (snapshot.hasData && snapshot.data!.exists) {
                     var data = snapshot.data!.data() as Map<String, dynamic>;
-                    dName = data['projectName'] ?? data['name'] ?? dName; // เช็คทั้ง projectName และ name กันพลาด
-                    dDesc = data['description'] ?? dDesc; // ✅ ดึง Description
+                    dName = data['projectName'] ?? data['name'] ?? dName;
+                    dDesc = data['description'] ?? "";
                     dCell = data['cellLine'] ?? dCell;
                     dDrug = data['drugName'] ?? dDrug;
                   }
 
                   return SliverAppBar(
+                    expandedHeight: 120,
                     title: Column(
                       children: [
-                        Text(dName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        // ✅ แสดง Description เล็กๆ ถ้ามี
+                        Text(dName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
                         if (dDesc.isNotEmpty)
                           Text(dDesc, style: const TextStyle(color: Colors.white70, fontSize: 10)),
                         Text("$dCell : $dDrug", style: const TextStyle(color: Colors.cyanAccent, fontSize: 12)),
@@ -132,10 +129,7 @@ class ProjectDetailScreen extends StatelessWidget {
                     backgroundColor: const Color(0xFF0F2027),
                     pinned: true,
                     floating: true,
-                    snap: true,
-                    elevation: 0,
                     iconTheme: const IconThemeData(color: Colors.cyanAccent),
-                    // ✅ ปุ่มแก้ไข ส่งค่าครบถ้วนรวม Description
                     actions: [
                       IconButton(
                         icon: const Icon(Icons.edit, color: Colors.cyanAccent),
@@ -146,17 +140,23 @@ class ProjectDetailScreen extends StatelessWidget {
                       indicatorColor: Colors.cyanAccent,
                       labelColor: Colors.cyanAccent,
                       unselectedLabelColor: Colors.white54,
-                      indicatorWeight: 3,
-                      tabs: [Tab(icon: Icon(Icons.show_chart), text: "Analytics"), Tab(icon: Icon(Icons.table_chart), text: "Data Logs")],
+                      tabs: [
+                        Tab(icon: Icon(Icons.show_chart), text: "Analytics"),
+                        Tab(icon: Icon(Icons.table_chart), text: "Data Logs")
+                      ],
                     ),
                   );
-                }
+                },
               ),
             ];
           },
           body: Container(
             decoration: const BoxDecoration(
-              gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)]),
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
+              ),
             ),
             child: StreamBuilder<QuerySnapshot>(
               stream: DatabaseService().getProjectData(projectId),
@@ -176,29 +176,49 @@ class ProjectDetailScreen extends StatelessWidget {
           icon: const Icon(Icons.add_a_photo),
           label: const Text("Add Data", style: TextStyle(fontWeight: FontWeight.bold)),
           onPressed: () {
-            // ส่งค่า Fixed ไปหน้า Upload (ถ้าจะให้ดีควรดึงค่าล่าสุดจาก Stream แต่ส่งค่าเดิมก็ใช้ได้ครับ)
-            Navigator.push(context, MaterialPageRoute(
-              builder: (_) => UploadScreen(projectId: projectId, cellLine: cellLine, drugName: drugName)
-            ));
+            // ดึงค่าล่าสุดจาก Firestore มาใช้ก่อนส่งไป Upload
+            FirebaseFirestore.instance
+                .collection('users').doc(uid).collection('projects').doc(projectId).get()
+                .then((doc) {
+                   String latestCell = cellLine;
+                   String latestDrug = drugName;
+                   if (doc.exists) {
+                     latestCell = doc.data()?['cellLine'] ?? cellLine;
+                     latestDrug = doc.data()?['drugName'] ?? drugName;
+                   }
+                   Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => UploadScreen(projectId: projectId, cellLine: latestCell, drugName: latestDrug)
+                  ));
+                });
           },
         ),
       ),
     );
   }
 
-  // ... (ส่วนกราฟและ Logs คงเดิม) ...
   Widget _buildGraphsView(List<QueryDocumentSnapshot> docs) {
     List<FlSpot> countSpots = [];
     List<FlSpot> sizeSpots = [];
+    
+    // กรองข้อมูลและแปลงเป็น Spot สำหรับกราฟ
     for (var doc in docs) {
       double conc = (doc['concentration'] as num).toDouble();
       countSpots.add(FlSpot(conc, (doc['colonyCount'] as num).toDouble()));
       sizeSpots.add(FlSpot(conc, (doc['avgSize'] as num).toDouble()));
     }
+    
     countSpots.sort((a, b) => a.x.compareTo(b.x));
     sizeSpots.sort((a, b) => a.x.compareTo(b.x));
 
-    return ListView(padding: const EdgeInsets.all(20), children: [_chartCard("Colony Count vs Concentration", countSpots, Colors.cyanAccent), const SizedBox(height: 20), _chartCard("Avg Size vs Concentration", sizeSpots, Colors.orangeAccent), const SizedBox(height: 80)]);
+    return ListView(
+      padding: const EdgeInsets.all(20), 
+      children: [
+        _chartCard("Colony Count vs Concentration", countSpots, Colors.cyanAccent),
+        const SizedBox(height: 20),
+        _chartCard("Avg Size vs Concentration", sizeSpots, Colors.orangeAccent),
+        const SizedBox(height: 80)
+      ]
+    );
   }
 
   Widget _chartCard(String title, List<FlSpot> spots, Color color) {
@@ -211,33 +231,61 @@ class ProjectDetailScreen extends StatelessWidget {
         children: [
           Text(title, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 25),
-          Expanded(child: LineChart(LineChartData(gridData: FlGridData(show: true, drawVerticalLine: false), titlesData: FlTitlesData(bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, getTitlesWidget: (v, m) => Text("${v.toInt()}", style: const TextStyle(color: Colors.white54, fontSize: 10)))), leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 30, getTitlesWidget: (v, m) => Text("${v.toInt()}", style: const TextStyle(color: Colors.white54, fontSize: 10)))), topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)), rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false))), borderData: FlBorderData(show: false), lineBarsData: [LineChartBarData(spots: spots, isCurved: true, color: color, barWidth: 3, dotData: FlDotData(show: true), belowBarData: BarAreaData(show: true, color: color.withOpacity(0.15)))]))),
+          Expanded(
+            child: LineChart(
+              LineChartData(
+                gridData: const FlGridData(show: true, drawVerticalLine: false),
+                titlesData: FlTitlesData(
+                  bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, getTitlesWidget: (v, m) => Text("${v.toInt()}", style: const TextStyle(color: Colors.white54, fontSize: 10)))),
+                  leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 30, getTitlesWidget: (v, m) => Text("${v.toInt()}", style: const TextStyle(color: Colors.white54, fontSize: 10)))),
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                ),
+                borderData: FlBorderData(show: false),
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: spots, 
+                    isCurved: true, 
+                    color: color, 
+                    barWidth: 3, 
+                    dotData: const FlDotData(show: true),
+                    belowBarData: BarAreaData(show: true, color: color.withOpacity(0.15))
+                  )
+                ]
+              )
+            )
+          ),
         ],
       ),
     );
   }
 
   Widget _buildDataLogsView(BuildContext context, List<QueryDocumentSnapshot> docs) {
-    docs.sort((a, b) => (a['concentration'] as num).compareTo(b['concentration'] as num));
+    // เรียงตามความเข้มข้นเพื่อให้ดูง่าย
+    var sortedDocs = List.from(docs);
+    sortedDocs.sort((a, b) => (a['concentration'] as num).compareTo(b['concentration'] as num));
+
     return ListView.builder(
       padding: const EdgeInsets.all(15),
-      itemCount: docs.length + 1,
+      itemCount: sortedDocs.length + 1,
       itemBuilder: (context, index) {
-        if (index == docs.length) return const SizedBox(height: 80);
-        var data = docs[index];
+        if (index == sortedDocs.length) return const SizedBox(height: 80);
+        var data = sortedDocs[index];
         String dateStr = data['timestamp'] != null ? DateFormat('dd/MM HH:mm').format((data['timestamp'] as Timestamp).toDate()) : '-';
+        
         return Card(
           color: Colors.white.withOpacity(0.05),
           margin: const EdgeInsets.symmetric(vertical: 6),
           child: ListTile(
-            leading: CircleAvatar(backgroundColor: Colors.white10, child: Text("${data['concentration']}", style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12))),
+            leading: CircleAvatar(
+              backgroundColor: Colors.white10, 
+              child: Text("${data['concentration']}", style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12))
+            ),
             title: Text("${data['colonyCount']} Colonies", style: const TextStyle(color: Colors.white)),
             subtitle: Text("Size: ${(data['avgSize'] as num).toStringAsFixed(1)} | $dateStr", style: const TextStyle(color: Colors.white54, fontSize: 12)),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                 IconButton(icon: const Icon(Icons.delete_outline, color: Colors.redAccent), onPressed: () => _confirmDeleteData(context, data.id)),
-              ],
+            trailing: IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.redAccent), 
+              onPressed: () => _confirmDeleteData(context, data.id)
             ),
           ),
         );
@@ -246,6 +294,24 @@ class ProjectDetailScreen extends StatelessWidget {
   }
 
   void _confirmDeleteData(BuildContext context, String docId) {
-    showDialog(context: context, builder: (ctx) => AlertDialog(backgroundColor: const Color(0xFF203A43), title: const Text("Delete Data?", style: TextStyle(color: Colors.white)), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")), ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent), onPressed: () async { final nav = Navigator.of(ctx); await DatabaseService().deleteExperimentData(projectId, docId); nav.pop(); }, child: const Text("Delete"))]));
+    showDialog(
+      context: context, 
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF203A43), 
+        title: const Text("Delete Data?", style: TextStyle(color: Colors.white)), 
+        content: const Text("This action cannot be undone.", style: TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")), 
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent), 
+            onPressed: () async { 
+              await DatabaseService().deleteExperimentData(projectId, docId); 
+              if (ctx.mounted) Navigator.pop(ctx); 
+            }, 
+            child: const Text("Delete")
+          )
+        ]
+      )
+    );
   }
 }

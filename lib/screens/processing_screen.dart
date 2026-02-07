@@ -4,11 +4,12 @@ import 'package:flutter_vision/flutter_vision.dart';
 import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
+import 'package:shared_preferences/shared_preferences.dart'; // ✅ เพิ่มเพื่อดึงค่า Setting
 import 'result_screen.dart';
 
 class ProcessingScreen extends StatefulWidget {
   final String projectId;
-  final File imageFile; 
+  final File imageFile;
   final String cellLine;
   final String drugName;
   final String concentration;
@@ -28,9 +29,7 @@ class ProcessingScreen extends StatefulWidget {
 
 class _ProcessingScreenState extends State<ProcessingScreen> {
   late FlutterVision vision;
-  
-  // ✅ คงไว้ที่ 1024 (ถูกแล้ว)
-  final int modelInputSize = 1024; 
+  final int modelInputSize = 1024;
 
   @override
   void initState() {
@@ -41,49 +40,50 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
 
   Future<void> _processAI() async {
     try {
+      // 📥 ดึงค่า AI Confidence ที่ตั้งไว้ในหน้า Settings
+      final prefs = await SharedPreferences.getInstance();
+      final double userConfidence = prefs.getDouble('ai_confidence') ?? 0.4;
+
       File fileToProcess = widget.imageFile;
+      final appDocDir = await getApplicationDocumentsDirectory();
+      String fileName = "cell_${DateTime.now().millisecondsSinceEpoch}.jpg";
+      String permanentPath = path.join(appDocDir.path, fileName);
+
       String extension = path.extension(widget.imageFile.path).toLowerCase();
 
-      // 1. แปลงไฟล์
       if (extension == '.tiff' || extension == '.tif') {
         final bytes = await widget.imageFile.readAsBytes();
         final img.Image? decodedImage = img.decodeImage(bytes);
         if (decodedImage != null) {
-          final tempDir = await getTemporaryDirectory();
-          final tempPath = path.join(tempDir.path, 'converted_image.jpg');
-          fileToProcess = await File(tempPath).writeAsBytes(img.encodeJpg(decodedImage));
+          fileToProcess = await File(permanentPath).writeAsBytes(img.encodeJpg(decodedImage));
         } else {
           throw Exception("File format not supported");
         }
+      } else {
+        fileToProcess = await widget.imageFile.copy(permanentPath);
       }
 
-      // 2. โหลดโมเดล
       await vision.loadYoloModel(
         labels: 'assets/labels/labels.txt',
-        modelPath: 'assets/models/yolo_v8_final_best_float32.tflite', 
+        modelPath: 'assets/models/yolo_v8_final_best_float32.tflite',
         modelVersion: "yolov8",
         numThreads: 2,
         useGpu: true,
       );
 
-      // 3. รันโมเดล (เปิดประตูเขื่อน!)
       final imageBytes = await fileToProcess.readAsBytes();
       final rawResults = await vision.yoloOnImage(
         bytesList: imageBytes,
         imageHeight: modelInputSize,
         imageWidth: modelInputSize,
-        
-        // 🔧 ปรับลงต่ำสุดๆ!
-        iouThreshold: 0.5,   // ค่ากลางๆ (เดิม 0.7 อาจจะรวมเซลล์ติดกันมากไป)
-        confThreshold: 0.05, // 👇 เอาต่ำติดดินเลย (5%) เพื่อดูว่ามันเห็นอะไรบ้าง
-        classThreshold: 0.05, 
+        iouThreshold: 0.5,
+        confThreshold: userConfidence,   // ✅ ใช้ค่าจริงจาก Settings
+        classThreshold: userConfidence,  // ✅ ใช้ค่าจริงจาก Settings
       );
 
-      // 4. กรองผลลัพธ์ (แทบไม่กรองเลย)
       int colonyCount = 0;
       double totalSize = 0.0;
       double avgSize = 0.0;
-
       List<Map<String, dynamic>> cleanResults = [];
 
       if (rawResults.isNotEmpty) {
@@ -92,22 +92,13 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
           final width = box[2] - box[0];
           final height = box[3] - box[1];
           final area = width * height;
-          
-          // ❌ เอา Filter area < 30 ออก! (เผื่อเซลล์มันเล็กจัด)
-          // ใส่ไว้แค่กัน Error (area = 0) พอ
-          if (area <= 1) continue; 
-
-          // ❌ เอา Filter Ratio ออก! (เผื่อเซลล์มันเบี้ยว)
-          // ให้มันโชว์ดิบๆ มาเลย
+          if (area <= 1) continue;
 
           cleanResults.add(result);
           colonyCount++;
           totalSize += area;
         }
-
-        if (colonyCount > 0) {
-          avgSize = totalSize / colonyCount;
-        }
+        if (colonyCount > 0) avgSize = totalSize / colonyCount;
       }
 
       await vision.closeYoloModel();
@@ -130,8 +121,10 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
         );
       }
     } catch (e) {
-      debugPrint("Error: $e");
-      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
+        Navigator.pop(context);
+      }
     }
   }
 
@@ -143,8 +136,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
         height: double.infinity,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+            begin: Alignment.topLeft, end: Alignment.bottomRight,
             colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
           ),
         ),
@@ -154,9 +146,9 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
             children: [
               CircularProgressIndicator(color: Colors.cyanAccent),
               SizedBox(height: 30),
-              Text("AI Analyzing...", style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+              Text("AI Analyzing...", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
               SizedBox(height: 10),
-              Text("Mode: Low Confidence (Floodgates Open)", style: TextStyle(color: Colors.white54)),
+              Text("Saving image to permanent storage", style: TextStyle(color: Colors.white54)),
             ],
           ),
         ),

@@ -11,7 +11,6 @@ class ResultScreen extends StatefulWidget {
   final String drugName;
   final String concentration;
   
-  // รับค่าผลลัพธ์จากหน้า Processing
   final int initialColonyCount;
   final double initialAvgSize;
   final List<Map<String, dynamic>> yoloResults;
@@ -36,8 +35,8 @@ class _ResultScreenState extends State<ResultScreen> {
   late int colonyCount;
   late double avgSize;
   
-  // ขนาด Input ของโมเดล (ต้องตรงกับที่ใช้ใน ProcessingScreen)
-  final int modelInputSize = 896; 
+  // ✅ แก้จุดนี้: ต้องเป็น 1024 ให้ตรงกับ ProcessingScreen เพื่อให้กรอบไม่เพี้ยน
+  final int modelInputSize = 1024; 
 
   @override
   void initState() {
@@ -139,12 +138,11 @@ class _ResultScreenState extends State<ResultScreen> {
               ),
               const SizedBox(height: 25),
 
-              // 2. Image Result & Overlay (เพิ่ม Zoom ตรงนี้)
+              // 2. Image Result & Overlay
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text("AI Detection Result", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-                  // ไอคอนบอก User ว่าซูมได้นะ
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(8)),
@@ -173,17 +171,15 @@ class _ResultScreenState extends State<ResultScreen> {
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(15),
-                      // ✅ เพิ่ม InteractiveViewer เพื่อให้ซูมได้
                       child: InteractiveViewer(
-                        panEnabled: true, // เลื่อนรูปได้
-                        minScale: 1.0,    // ซูมออกสุดได้เท่าขนาดจริง
-                        maxScale: 4.0,    // ซูมเข้าได้ 4 เท่า
+                        panEnabled: true,
+                        minScale: 1.0,
+                        maxScale: 4.0,
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
                             Image.file(widget.imageFile, fit: BoxFit.fill),
                             
-                            // วาดกรอบสี่เหลี่ยม (มันจะขยายตามรูปอัตโนมัติ เพราะอยู่ใน Stack เดียวกัน)
                             ...widget.yoloResults.map((result) {
                               final box = result['box'];
                               final double scaleFactor = displaySize / modelInputSize;
@@ -196,8 +192,8 @@ class _ResultScreenState extends State<ResultScreen> {
                               return Positioned(
                                 left: x1,
                                 top: y1,
-                                width: x2 - x1,
-                                height: y2 - y1,
+                                width: (x2 - x1).clamp(0, displaySize),
+                                height: (y2 - y1).clamp(0, displaySize),
                                 child: Container(
                                   decoration: BoxDecoration(
                                     border: Border.all(color: Colors.greenAccent, width: 2),
