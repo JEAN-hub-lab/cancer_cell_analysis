@@ -1,8 +1,13 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:csv/csv.dart'; 
+import 'package:path_provider/path_provider.dart'; 
+import 'package:share_plus/share_plus.dart'; 
+import 'package:cross_file/cross_file.dart';
 import '../services/database_service.dart';
 import 'upload_screen.dart';
 
@@ -20,7 +25,64 @@ class ProjectDetailScreen extends StatelessWidget {
     required this.drugName,
   });
 
-  // ✅ แก้ไข Dialog ให้รองรับการอัปเดตข้อมูลที่แม่นยำ
+  // ✅ แก้ไขฟังก์ชัน Export ให้เรียกตัวแปรถูกตัวและแชร์ได้จริง
+  Future<void> _exportToCSV(BuildContext context, List<QueryDocumentSnapshot> docs) async {
+    try {
+      List<List<dynamic>> rows = [];
+
+      // ส่วนหัวของไฟล์ CSV
+      rows.add(["Date", "Drug", "Concentration (uM)", "Colony Count", "Avg Size"]);
+
+      for (var doc in docs) {
+        var data = doc.data() as Map<String, dynamic>;
+        String dateStr = data['timestamp'] != null 
+            ? DateFormat('yyyy-MM-dd HH:mm').format((data['timestamp'] as Timestamp).toDate()) 
+            : '-';
+        
+        List<dynamic> row = [];
+        row.add(dateStr);
+        row.add(data['drugName'] ?? drugName);
+        row.add(data['concentration']);
+        row.add(data['colonyCount']);
+        row.add(data['avgSize']);
+        rows.add(row);
+      }
+
+      String csvData = const ListToCsvConverter().convert(rows);
+
+      // หาที่อยู่ในการเซฟไฟล์ในเครื่อง
+      final directory = await getApplicationDocumentsDirectory();
+      
+      // ✅ แก้ไขเป็น ${projectName} เพื่อดึงชื่อโปรเจกต์มาตั้งชื่อไฟล์
+      final String filePath = "${directory.path}/${projectName}_results.csv";
+      final File file = File(filePath);
+
+      await file.writeAsString(csvData);
+
+      // ✅ แชร์ไฟล์ทันที
+      if (context.mounted) {
+        await Share.shareXFiles(
+          [XFile(filePath)],
+          text: 'Cancer Cell Analysis Result: $projectName',
+          subject: 'Experiment Data CSV Export',
+        );
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Exported and ready to share!"),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Export failed: $e"), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   void _showEditProjectDialog(BuildContext context, String currentName, String currentDesc, String currentCell, String currentDrug) {
     final nameCtrl = TextEditingController(text: currentName);
     final descCtrl = TextEditingController(text: currentDesc);
@@ -84,7 +146,6 @@ class ProjectDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ดึง UID ของ User ปัจจุบัน
     final String uid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
     return DefaultTabController(
@@ -93,14 +154,9 @@ class ProjectDetailScreen extends StatelessWidget {
         body: NestedScrollView(
           headerSliverBuilder: (context, innerBoxIsScrolled) {
             return [
-              // ✅ แก้ไข Stream ให้ชี้ไปที่ Path ของ User (ตาม DatabaseService)
               StreamBuilder<DocumentSnapshot>(
                 stream: FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(uid)
-                    .collection('projects')
-                    .doc(projectId)
-                    .snapshots(),
+                    .collection('users').doc(uid).collection('projects').doc(projectId).snapshots(),
                 builder: (context, snapshot) {
                   String dName = projectName;
                   String dDesc = "";
@@ -139,7 +195,6 @@ class ProjectDetailScreen extends StatelessWidget {
                     bottom: const TabBar(
                       indicatorColor: Colors.cyanAccent,
                       labelColor: Colors.cyanAccent,
-                      unselectedLabelColor: Colors.white54,
                       tabs: [
                         Tab(icon: Icon(Icons.show_chart), text: "Analytics"),
                         Tab(icon: Icon(Icons.table_chart), text: "Data Logs")
@@ -153,8 +208,7 @@ class ProjectDetailScreen extends StatelessWidget {
           body: Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
+                begin: Alignment.topCenter, end: Alignment.bottomCenter,
                 colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
               ),
             ),
@@ -165,7 +219,10 @@ class ProjectDetailScreen extends StatelessWidget {
                 var docs = snapshot.data!.docs;
                 if (docs.isEmpty) return const Center(child: Text("No Experiments Yet", style: TextStyle(color: Colors.white54)));
                 
-                return TabBarView(children: [_buildGraphsView(docs), _buildDataLogsView(context, docs)]);
+                return TabBarView(children: [
+                  _buildGraphsView(docs), 
+                  _buildDataLogsView(context, docs)
+                ]);
               },
             ),
           ),
@@ -176,7 +233,6 @@ class ProjectDetailScreen extends StatelessWidget {
           icon: const Icon(Icons.add_a_photo),
           label: const Text("Add Data", style: TextStyle(fontWeight: FontWeight.bold)),
           onPressed: () {
-            // ดึงค่าล่าสุดจาก Firestore มาใช้ก่อนส่งไป Upload
             FirebaseFirestore.instance
                 .collection('users').doc(uid).collection('projects').doc(projectId).get()
                 .then((doc) {
@@ -199,14 +255,11 @@ class ProjectDetailScreen extends StatelessWidget {
   Widget _buildGraphsView(List<QueryDocumentSnapshot> docs) {
     List<FlSpot> countSpots = [];
     List<FlSpot> sizeSpots = [];
-    
-    // กรองข้อมูลและแปลงเป็น Spot สำหรับกราฟ
     for (var doc in docs) {
       double conc = (doc['concentration'] as num).toDouble();
       countSpots.add(FlSpot(conc, (doc['colonyCount'] as num).toDouble()));
       sizeSpots.add(FlSpot(conc, (doc['avgSize'] as num).toDouble()));
     }
-    
     countSpots.sort((a, b) => a.x.compareTo(b.x));
     sizeSpots.sort((a, b) => a.x.compareTo(b.x));
 
@@ -241,14 +294,9 @@ class ProjectDetailScreen extends StatelessWidget {
                   topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                   rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                 ),
-                borderData: FlBorderData(show: false),
                 lineBarsData: [
                   LineChartBarData(
-                    spots: spots, 
-                    isCurved: true, 
-                    color: color, 
-                    barWidth: 3, 
-                    dotData: const FlDotData(show: true),
+                    spots: spots, isCurved: true, color: color, barWidth: 3, dotData: const FlDotData(show: true),
                     belowBarData: BarAreaData(show: true, color: color.withOpacity(0.15))
                   )
                 ]
@@ -261,35 +309,55 @@ class ProjectDetailScreen extends StatelessWidget {
   }
 
   Widget _buildDataLogsView(BuildContext context, List<QueryDocumentSnapshot> docs) {
-    // เรียงตามความเข้มข้นเพื่อให้ดูง่าย
     var sortedDocs = List.from(docs);
     sortedDocs.sort((a, b) => (a['concentration'] as num).compareTo(b['concentration'] as num));
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(15),
-      itemCount: sortedDocs.length + 1,
-      itemBuilder: (context, index) {
-        if (index == sortedDocs.length) return const SizedBox(height: 80);
-        var data = sortedDocs[index];
-        String dateStr = data['timestamp'] != null ? DateFormat('dd/MM HH:mm').format((data['timestamp'] as Timestamp).toDate()) : '-';
-        
-        return Card(
-          color: Colors.white.withOpacity(0.05),
-          margin: const EdgeInsets.symmetric(vertical: 6),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: Colors.white10, 
-              child: Text("${data['concentration']}", style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12))
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+          child: ElevatedButton.icon(
+            onPressed: () => _exportToCSV(context, sortedDocs.cast<QueryDocumentSnapshot>()),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white10,
+              foregroundColor: Colors.cyanAccent,
+              minimumSize: const Size(double.infinity, 45),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              side: const BorderSide(color: Colors.cyanAccent, width: 0.5),
             ),
-            title: Text("${data['colonyCount']} Colonies", style: const TextStyle(color: Colors.white)),
-            subtitle: Text("Size: ${(data['avgSize'] as num).toStringAsFixed(1)} | $dateStr", style: const TextStyle(color: Colors.white54, fontSize: 12)),
-            trailing: IconButton(
-              icon: const Icon(Icons.delete_outline, color: Colors.redAccent), 
-              onPressed: () => _confirmDeleteData(context, data.id)
-            ),
+            icon: const Icon(Icons.share),
+            label: const Text("EXPORT & SHARE CSV"),
           ),
-        );
-      },
+        ),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 15),
+            itemCount: sortedDocs.length + 1,
+            itemBuilder: (context, index) {
+              if (index == sortedDocs.length) return const SizedBox(height: 80);
+              var data = sortedDocs[index];
+              String dateStr = data['timestamp'] != null ? DateFormat('dd/MM HH:mm').format((data['timestamp'] as Timestamp).toDate()) : '-';
+              
+              return Card(
+                color: Colors.white.withOpacity(0.05),
+                margin: const EdgeInsets.symmetric(vertical: 6),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.white10, 
+                    child: Text("${data['concentration']}", style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12))
+                  ),
+                  title: Text("${data['colonyCount']} Colonies", style: const TextStyle(color: Colors.white)),
+                  subtitle: Text("Size: ${(data['avgSize'] as num).toStringAsFixed(1)} | $dateStr", style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete_outline, color: Colors.redAccent), 
+                    onPressed: () => _confirmDeleteData(context, data.id)
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
