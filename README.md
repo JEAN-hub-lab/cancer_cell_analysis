@@ -1,16 +1,22 @@
-# cancer_cell_analysis
+Cancer Cell Analysis App
+แอปพลิเคชันวิเคราะห์เซลล์มะเร็งด้วย AI (On-Device Processing)
 
-A new Flutter project.
+แอปพลิเคชันบนมือถือที่พัฒนาด้วย Flutter เพื่อช่วยนักวิจัยในการนับและวัดขนาดเซลล์มะเร็งโดยอัตโนมัติ โดยใช้เทคโนโลยีปัญญาประดิษฐ์ประมวลผลบนตัวเครื่อง
 
-## Getting Started
+Tech Stack
+Frontend: Flutter (Dart)
 
-This project is a starting point for a Flutter application.
+AI Engine: YOLOv8 TFLite (On-Device Inference)
 
-A few resources to get you started if this is your first Flutter project:
+Database: Hybrid System (SQLite สำหรับ Offline และ Firebase Firestore สำหรับ Cloud Sync)
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+Auth: Firebase Authentication
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Key Features
+AI Analysis: วิเคราะห์จำนวนและขนาดเซลล์ พร้อมปรับค่า Confidence Slider ได้
+
+Offline First: ทำงานได้แม้ไม่มีอินเทอร์เน็ต และสำรองข้อมูลขึ้นคลาวด์อัตโนมัติ
+
+Data Visualization: แสดงกราฟความสัมพันธ์ระหว่างความเข้มข้นยาและจำนวนเซลล์
+
+Data Export: ส่งออกข้อมูลเป็นไฟล์ CSV เพื่อนำไปวิเคราะห์ต่อ
