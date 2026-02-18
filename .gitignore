@@ -1,45 +1,72 @@
-# Miscellaneous
-*.class
-*.log
-*.pyc
-*.swp
-.DS_Store
-.atom/
-.build/
-.buildlog/
-.history
-.svn/
-.swiftpm/
-migrate_working_dir/
-
-# IntelliJ related
-*.iml
-*.ipr
-*.iws
-.idea/
-
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
-
-# Flutter/Dart/Pub related
-**/doc/api/
-**/ios/Flutter/.last_build_id
+# ----------------------------------------------------------------------------
+# Flutter/Dart related
+# ----------------------------------------------------------------------------
 .dart_tool/
+.flutter-plugins
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
 /build/
-/coverage/
 
-# Symbolication related
-app.*.symbols
+# ----------------------------------------------------------------------------
+# Android related
+# ----------------------------------------------------------------------------
+**/android/local.properties
+**/android/**/generated/
+**/android/app/debug/
+**/android/app/profile/
+**/android/app/release/
+.gradle/
 
-# Obfuscation related
-app.*.map.json
+# [SECURITY] Ignore Firebase Secret Key (google-services.json)
+# หากต้องการเปิด Repo เป็น Public แนะนำให้ ignore ไฟล์นี้เพื่อความปลอดภัย
+**/android/app/google-services.json
 
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
+# ----------------------------------------------------------------------------
+# iOS related
+# ----------------------------------------------------------------------------
+**/ios/Flutter/.last_build_id
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/flutter_export_environment.sh
+**/ios/Flutter/flutter_bundle_flags.sh
+**/ios/Flutter/App.framework
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+**/ios/derived_data/
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Config/config.json
+**/ios/ServiceDefinitions.json
+.helper
+
+# [SECURITY] Ignore iOS Firebase Secret Key
+**/ios/Runner/GoogleService-Info.plist
+
+# ----------------------------------------------------------------------------
+# Environment Variables & Secrets (Security Best Practice)
+# ----------------------------------------------------------------------------
+.env
+.env.*
+*.secret
+
+# ----------------------------------------------------------------------------
+# IDE Related (IntelliJ, VS Code, etc.)
+# ----------------------------------------------------------------------------
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.project
+.settings/
+.classpath
+
+# ----------------------------------------------------------------------------
+# Miscellaneous
+# ----------------------------------------------------------------------------
+*.log
+*.class
+*.pyc
+*.swp
+.DS_Store
+Thumbs.db
