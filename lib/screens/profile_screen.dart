@@ -7,6 +7,7 @@ import '../services/auth_service.dart';
 import '../services/database_service.dart';
 import '../services/local_database_service.dart';
 import 'settings_screen.dart'; 
+import 'login_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -199,12 +200,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         const SizedBox(height: 30),
 
+                        // Logout Button (แก้ไขแล้ว)
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 20),
                           child: ElevatedButton(
-                            onPressed: () { 
-                              _auth.logout(); 
-                              Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false); 
+                            onPressed: () async { 
+                              await _auth.logout(); 
+                              if (!mounted) return;
+                              Navigator.pushAndRemoveUntil(
+                                context,
+                                MaterialPageRoute(builder: (context) => const LoginScreen()),
+                                (route) => false,
+                              );
                             }, 
                             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent.withOpacity(0.1), foregroundColor: Colors.redAccent, minimumSize: const Size(double.infinity, 55), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)), side: const BorderSide(color: Colors.redAccent)), 
                             child: const Text("Log Out", style: TextStyle(fontWeight: FontWeight.bold))

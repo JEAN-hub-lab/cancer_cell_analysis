@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
 import '../services/auth_service.dart';
+import 'dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -11,7 +12,6 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  // เปลี่ยนชื่อตัวแปรให้สื่อความหมาย (รับได้ทั้ง Username และ Email)
   final _usernameController = TextEditingController(); 
   final _passController = TextEditingController();
   final AuthService _authService = AuthService();
@@ -21,12 +21,19 @@ class _LoginScreenState extends State<LoginScreen> {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
       try {
-        // เรียกใช้ฟังก์ชัน login ตัวใหม่ที่รองรับ Username
         await _authService.login(
           _usernameController.text.trim(),
           _passController.text.trim(),
         );
-        // ไม่ต้องสั่ง Navigator แล้ว เพราะ StreamBuilder ใน main.dart จะจัดการพาไป Dashboard เอง
+        
+        if (!mounted) return;
+        
+        // เด้งไปหน้า Dashboard ทันที
+        Navigator.pushReplacement(
+          context, 
+          MaterialPageRoute(builder: (context) => const DashboardScreen())
+        );
+        
       } catch (e) {
         if (mounted) {
            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Login Failed: $e"), backgroundColor: Colors.red));
@@ -75,7 +82,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         key: _formKey,
                         child: Column(
                           children: [
-                            // แก้ Label ตรงนี้
                             _buildTextField(_usernameController, 'Username or Email', Icons.person), 
                             const SizedBox(height: 20),
                             _buildTextField(_passController, 'Password', Icons.lock, isObscure: true),
