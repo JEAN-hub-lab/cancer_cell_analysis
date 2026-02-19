@@ -100,6 +100,7 @@ CREATE TABLE user_images (
   uid TEXT PRIMARY KEY,
   image_path TEXT
 );
+```
 Installation Guide
 Prerequisites
 Flutter SDK version 3.0.0 or higher
@@ -112,10 +113,14 @@ Firebase Console account
 
 Setup Steps
 1. Clone Repository
+```sql
 git clone https://github.com/[username]/cancer_cell_analysis.git
+```
 2. Install Dependencies
+```sql
 cd cancer_cell_analysis
 flutter pub get
+```
 3. Configure Firebase
 นำไฟล์ google-services.json จาก Firebase Console ไปวางที่:
 
