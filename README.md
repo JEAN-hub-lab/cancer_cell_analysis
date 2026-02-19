@@ -175,10 +175,11 @@ FlutterVision().yoloOnImage()
 Export CSV ผ่าน _exportToCSV()
 
 แชร์ผ่าน Email หรือแอปอื่นได้
-
+```sql
 System Architecture
 Flutter Mobile Application
         │
         ├── Local SQLite Database (Offline)
         │
         └── Firebase Firestore (Cloud Sync)
+```
