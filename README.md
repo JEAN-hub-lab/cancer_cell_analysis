@@ -1,27 +1,47 @@
-# Cancer Cell Analysis App
-**แอปพลิเคชันวิเคราะห์และนับจำนวนเซลล์มะเร็งด้วยเทคโนโลยี AI**
+# Cancer Cell Analysis Application
 
-[cite_start]โครงงานนี้พัฒนาแอปพลิเคชันบนมือถือเพื่อช่วยนักวิจัยในการนับจำนวน (Colony Count) และวัดขนาดเซลล์มะเร็งโดยอัตโนมัติ เพื่อลดความผิดพลาดจากสายตามนุษย์ (Human Error) และเพิ่มความรวดเร็วในการวิเคราะห์ผลการทดลอง [cite: 9]
+แอปพลิเคชันสำหรับวิเคราะห์ นับจำนวน และวัดขนาดเซลล์มะเร็งผ่านกล้องจุลทรรศน์ด้วยเทคโนโลยีปัญญาประดิษฐ์ (AI) โครงงานนี้พัฒนาระบบสถาปัตยกรรมฐานข้อมูลแบบผสมผสาน (Hybrid Database) เพื่อรองรับการทำงานในสภาวะที่ไม่มีสัญญาณอินเทอร์เน็ต (Offline-First) และสามารถซิงโครไนซ์ข้อมูลขึ้นระบบคลาวด์ได้โดยอัตโนมัติ
 
-## สมาชิกในทีม
-1. [cite_start]**นายปรินทร คงผล** (Main Developer) - พัฒนาระบบหลัก, AI Integration และ Logic ทั้งหมด [cite: 143]
-2. [cite_start]**นายขจร หมื่นบาล** (Co-Developer) - พัฒนาระบบฐานข้อมูล, จัดทำรายงาน และสื่อนำเสนอ [cite: 143]
+## 1. ข้อมูลทางเทคนิค (Tech Stack)
+- Frontend: Flutter Framework (Dart)
+- Backend / Cloud Database: Firebase (Authentication, Firestore)
+- Local Database (Offline Storage): SQLite (ผ่านไลบรารี sqflite)
+- Artificial Intelligence: YOLOv8 Deployment (TensorFlow Lite) ผ่านไลบรารี flutter_vision
+- Data Visualization & Analytics: fl_chart
+- File System: path_provider สำหรับการจัดการ Permanent Storage
 
-## Tech Stack
-* [cite_start]**Frontend:** [Flutter](https://flutter.dev/) (Cross-platform support) [cite: 27]
-* [cite_start]**AI Model:** YOLOv8 (Converted to TFLite for On-device processing) [cite: 17, 29]
-* [cite_start]**Database (Hybrid):** * **Local:** [SQLite](https://pub.dev/packages/sqflite) (Offline-first capability) [cite: 21, 28]
-  * [cite_start]**Cloud:** [Firebase Firestore](https://firebase.google.com/docs/firestore) (Data Backup & Sync) [cite: 22, 28]
-* [cite_start]**Authentication:** Firebase Auth [cite: 13, 102]
+---
 
-## Key Features
-* [cite_start]**On-Device AI Inference:** ประมวลผลภาพในเครื่องทันที ไม่ต้องใช้อินเทอร์เน็ตเพื่อรักษาความเป็นส่วนตัว [cite: 10, 17]
-* [cite_start]**AI Precision Tuning:** ผู้ใช้สามารถปรับค่าความไว (Confidence Slider) ได้แบบ Real-time [cite: 19]
-* [cite_start]**Manual Correction:** รองรับการแก้ไขจำนวนเซลล์ด้วยมือกรณี AI ประมวลผลผิดพลาด [cite: 18, 49]
-* [cite_start]**Data Visualization:** แสดงกราฟเส้น (Line Chart) แสดงแนวโน้มการตอบสนองของยาต่อจำนวนเซลล์ [cite: 25]
-* [cite_start]**Data Export:** ส่งออกข้อมูลการทดลองเป็นไฟล์ CSV เพื่อใช้งานใน Excel ต่อไป [cite: 23]
+## 2. โครงสร้างฐานข้อมูลระดับซอร์สโค้ด (Data Model & Source Code Structure)
 
-## Project Structure
-- [cite_start]`lib/screens/`: ส่วนติดต่อผู้ใช้ (UI) ทั้ง 5 หน้าหลัก [cite: 56]
-- [cite_start]`lib/services/`: ส่วนจัดการ Logic, Authentication และ Database [cite: 103]
-- [cite_start]`assets/models/`: ที่เก็บไฟล์โมเดล YOLOv8 (.tflite) [cite: 87, 88]
+ระบบใช้สถาปัตยกรรม Hybrid Database ควบคู่กับ Queue-based Synchronization เพื่อความสมบูรณ์ของข้อมูล
+
+### 2.1 Cloud Database (Firebase Firestore)
+จัดเก็บในรูปแบบ NoSQL Document-based (Nested Collection)
+- Collection: users (Document ID: uid)
+  - Fields: username (String), photoUrl (String)
+  - Sub-collection: projects (Document ID: projectId)
+    - Fields: name, drugName, cellLine (String), createdAt (Timestamp)
+    - Sub-collection: experiments (Document ID: experimentId)
+      - Fields: concentration (Number), colonyCount (Number), avgSize (Number), timestamp (Timestamp)
+
+### 2.2 Local Database (SQLite Schema)
+การกำหนดสคีมาตารางในไฟล์ lib/services/local_database_service.dart:
+- Table projects: id (PK), name, drug_name, cell_line, is_synced
+- Table experiments: id (PK), project_id, concentration, colony_count, avg_size, image_path, timestamp
+- Table user_images: uid (PK), image_path
+
+---
+
+## 3. คู่มือการติดตั้งระบบ (Installation Guide)
+
+### 3.1 สิ่งที่ต้องเตรียม (Prerequisites)
+- Flutter SDK (เวอร์ชัน 3.0.0 ขึ้นไป)
+- Android Studio พร้อม Android SDK
+- อุปกรณ์สมาร์ตโฟนระบบปฏิบัติการ Android (สำหรับการประมวลผลโมเดล AI และการใช้กล้อง)
+- บัญชี Firebase Console สำหรับฐานข้อมูลออนไลน์
+
+### 3.2 ขั้นตอนการติดตั้ง (Setup Steps)
+1. ทำการโคลนซอร์สโค้ดจากแพลตฟอร์ม GitHub:
+   ```bash
+   git clone [https://github.com/](https://github.com/)[ชื่อผู้ใช้]/cancer_cell_analysis.git
